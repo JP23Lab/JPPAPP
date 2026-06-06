@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffb6c1">
+<title>JPPP App 🌿</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --jp: #5bbf7a; --jp-light: #a8e6bb; --jp-pale: #f0fff5; --jp-soft: #d4f5e1;
+  --pp: #a78bcc; --pp-light: #d4bbf0; --pp-pale: #f8f0ff; --pp-soft: #ead4f5;
+  --wish: #ff8fab; --wish-light: #ffb3c6; --wish-pale: #fff0f4; --wish-soft: #ffe4ec;
+  --bg: #fff0f4; --white: #ffffff; --text: #3a2d32; --muted: #a08898; --border: #f5d6e2;
+  --shadow: 0 4px 20px rgba(255,143,171,0.13); --radius: 20px; --radius-sm: 13px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--bg);
+  background-image: radial-gradient(circle at 5% 5%, rgba(255,182,203,0.35) 0%, transparent 40%),
+    radial-gradient(circle at 95% 95%, rgba(167,139,204,0.18) 0%, transparent 40%);
+  color: var(--text); font-family: 'Sarabun', sans-serif; min-height: 100vh; padding-bottom: 30px;
+}
+.wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 0; }
+.header { text-align: center; padding: 14px 0 6px; }
+.logo { font-family: 'Nunito', sans-serif; font-size: 2rem; font-weight: 900; letter-spacing: -0.5px; line-height: 1; }
+.logo .jp { color: var(--jp); } .logo .pp { color: var(--pp); }
+.logo .app { color: var(--muted); font-size: 0.95rem; font-weight: 700; vertical-align: middle; margin-left: 5px; }
+.tagline { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+
+/* SYNC STATUS BAR */
+.sync-bar {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 0.72rem; font-weight: 600; padding: 5px 12px; border-radius: 50px;
+  margin: 6px auto 0; width: fit-content; transition: all 0.3s;
+}
+.sync-bar.ok { background: var(--jp-soft); color: #3a8c55; }
+.sync-bar.loading { background: #fff8e1; color: #b8860b; }
+.sync-bar.error { background: #fff0f0; color: #cc3333; }
+.sync-bar.local { background: #f0f0f0; color: var(--muted); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.sync-bar.loading .sync-dot { animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* SETUP CARD */
+.setup-card {
+  background: var(--white); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 14px; border: 2px dashed var(--wish-light);
+  text-align: center;
+}
+.setup-card h3 { font-family:'Nunito',sans-serif; font-size:1rem; font-weight:800; color:var(--wish); margin-bottom:8px; }
+.setup-card p { font-size:0.82rem; color:var(--muted); line-height:1.6; margin-bottom:14px; }
+.setup-input { width:100%; padding:10px 14px; border-radius:var(--radius-sm); border:1.5px solid var(--border); font-family:'Sarabun',sans-serif; font-size:0.9rem; color:var(--text); background:var(--wish-pale); outline:none; margin-bottom:10px; }
+.setup-input:focus { border-color:var(--wish); background:var(--white); }
+.btn-setup { width:100%; padding:12px; background:linear-gradient(135deg,var(--wish),var(--wish-light)); border:none; border-radius:var(--radius-sm); color:white; font-family:'Nunito',sans-serif; font-size:0.95rem; font-weight:800; cursor:pointer; box-shadow:0 4px 15px rgba(255,143,171,0.4); touch-action:manipulation; }
+.setup-steps { background:var(--jp-pale); border-radius:var(--radius-sm); padding:14px; font-size:0.78rem; color:var(--text); line-height:1.8; text-align:left; margin-bottom:14px; border:1.5px solid var(--jp-light); }
+.setup-steps strong { color:var(--jp); }
+.setup-steps code { background:var(--jp-soft); padding:1px 6px; border-radius:5px; font-size:0.75rem; }
+.btn-skip { width:100%; padding:10px; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--white); color:var(--muted); font-family:'Sarabun',sans-serif; font-size:0.85rem; font-weight:600; cursor:pointer; margin-top:8px; }
+
+.nav { display:flex; background:var(--white); border-radius:50px; padding:5px; box-shadow:var(--shadow); margin:12px 0 16px; gap:3px; }
+.nav-btn { flex:1; padding:8px 4px; border:none; border-radius:50px; background:none; font-family:'Sarabun',sans-serif; font-size:0.75rem; font-weight:700; color:var(--muted); cursor:pointer; transition:all 0.25s; white-space:nowrap; touch-action:manipulation; }
+.nav-btn.active { background:linear-gradient(135deg,var(--jp),#7dd49a); color:white; box-shadow:0 3px 12px rgba(91,191,122,0.4); }
+.nav-btn.active.wish-nav { background:linear-gradient(135deg,var(--wish),var(--wish-light)); box-shadow:0 3px 12px rgba(255,143,171,0.4); }
+
+.card { background:var(--white); border-radius:var(--radius); padding:18px; margin-bottom:14px; box-shadow:0 2px 16px rgba(255,182,203,0.1); border:1.5px solid var(--border); }
+.card-title { font-family:'Nunito',sans-serif; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--jp); margin-bottom:14px; }
+.card-title.wish { color:var(--wish); }
+label { display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:5px; }
+input[type=text],input[type=number],input[type=date],select,textarea {
+  width:100%; background:var(--jp-pale); border:1.5px solid var(--border); border-radius:var(--radius-sm);
+  color:var(--text); font-family:'Sarabun',sans-serif; font-size:0.95rem; padding:10px 14px; outline:none;
+  transition:border-color 0.2s,background 0.2s; -webkit-appearance:none;
+}
+textarea { resize:vertical; min-height:60px; }
+input:focus,select:focus,textarea:focus { border-color:var(--jp); background:var(--white); }
+.form-row { margin-bottom:13px; }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.wish-form input,.wish-form select,.wish-form textarea { background:var(--wish-pale); }
+.wish-form input:focus,.wish-form select:focus { border-color:var(--wish); background:var(--white); }
+
+.split-chips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
+.chip { padding:6px 13px; border-radius:50px; border:1.5px solid var(--border); background:var(--white); color:var(--muted); font-family:'Sarabun',sans-serif; font-size:0.8rem; font-weight:600; cursor:pointer; transition:all 0.2s; touch-action:manipulation; }
+.chip.active { background:linear-gradient(135deg,var(--jp),#7dd49a); color:white; border-color:transparent; box-shadow:0 2px 10px rgba(91,191,122,0.35); }
+.split-bar-wrap { background:var(--pp-soft); border-radius:50px; height:11px; overflow:hidden; margin:10px 0 6px; }
+.split-bar-fill { height:100%; background:linear-gradient(90deg,var(--jp),var(--jp-light)); border-radius:50px; transition:width 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.split-labels { display:flex; justify-content:space-between; font-size:0.78rem; font-weight:700; }
+.lbl-jp { color:var(--jp); } .lbl-pp { color:var(--pp); }
+.payer-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.payer-btn { padding:11px; border-radius:var(--radius-sm); border:2px solid var(--border); background:var(--white); font-family:'Sarabun',sans-serif; font-size:0.9rem; font-weight:600; cursor:pointer; text-align:center; transition:all 0.2s; color:var(--muted); touch-action:manipulation; }
+.payer-btn.jp.active { border-color:var(--jp); background:var(--jp-soft); color:#3a8c55; }
+.payer-btn.pp.active { border-color:var(--pp); background:var(--pp-soft); color:#6a3ea0; }
+.btn-add { width:100%; padding:14px; background:linear-gradient(135deg,var(--jp),#7dd49a); border:none; border-radius:var(--radius-sm); color:white; font-family:'Nunito',sans-serif; font-size:1rem; font-weight:800; cursor:pointer; transition:all 0.2s; margin-top:6px; box-shadow:0 4px 15px rgba(91,191,122,0.4); touch-action:manipulation; }
+.btn-add:active { transform:scale(0.98); }
+.btn-add.wish-btn { background:linear-gradient(135deg,var(--wish),var(--wish-light)); box-shadow:0 4px 15px rgba(255,143,171,0.4); }
+
+/* DASHBOARD */
+.dash-hero { background:linear-gradient(135deg,var(--jp) 0%,#7dd49a 100%); border-radius:var(--radius); padding:22px; color:white; text-align:center; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:0 6px 24px rgba(91,191,122,0.35); }
+.dash-hero::after { content:'🌿'; position:absolute; font-size:6rem; opacity:0.1; right:-8px; top:-8px; pointer-events:none; }
+.hero-label { font-size:0.75rem; opacity:0.9; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; }
+.hero-amount { font-family:'Nunito',sans-serif; font-size:2.5rem; font-weight:900; margin:4px 0; }
+.hero-sub { font-size:0.8rem; opacity:0.88; }
+.dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:14px; }
+.stat-card { background:var(--white); border-radius:var(--radius-sm); padding:14px 12px; text-align:center; border:1.5px solid var(--border); }
+.stat-card.jp { border-color:var(--jp-light); background:var(--jp-pale); }
+.stat-card.pp { border-color:var(--pp-light); background:var(--pp-pale); }
+.stat-avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1rem; margin:0 auto 6px; }
+.stat-card.jp .stat-avatar { background:var(--jp-soft); }
+.stat-card.pp .stat-avatar { background:var(--pp-soft); }
+.stat-name { font-size:0.7rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:2px; }
+.stat-amount { font-family:'Nunito',sans-serif; font-size:1.25rem; font-weight:800; }
+.stat-card.jp .stat-amount { color:var(--jp); }
+.stat-card.pp .stat-amount { color:var(--pp); }
+.stat-sub { font-size:0.7rem; color:var(--muted); margin-top:2px; }
+.wish-mini { background:linear-gradient(135deg,var(--wish-pale),#fff5f8); border-radius:var(--radius-sm); padding:13px; border:1.5px solid var(--wish-light); margin-bottom:14px; display:flex; align-items:center; gap:12px; }
+.wish-mini-icon { font-size:1.6rem; }
+.wish-mini-text { flex:1; }
+.wish-mini-label { font-size:0.72rem; font-weight:700; color:var(--wish); text-transform:uppercase; letter-spacing:0.08em; }
+.wish-mini-amount { font-family:'Nunito',sans-serif; font-size:1.2rem; font-weight:800; color:var(--wish); }
+.wish-mini-sub { font-size:0.72rem; color:var(--muted); }
+.donut-wrap { background:var(--white); border-radius:var(--radius); padding:18px; margin-bottom:14px; border:1.5px solid var(--border); }
+.donut-title { font-family:'Nunito',sans-serif; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--jp); margin-bottom:12px; }
+.big-bar-wrap { height:24px; background:var(--pp-soft); border-radius:50px; overflow:hidden; margin-bottom:8px; }
+.big-bar-jp { height:100%; background:linear-gradient(90deg,var(--jp),var(--jp-light)); border-radius:50px; transition:width 0.6s cubic-bezier(0.34,1.56,0.64,1); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:white; min-width:36px; }
+.bar-row { display:flex; justify-content:space-between; align-items:center; }
+.bar-legend { display:flex; align-items:center; gap:5px; font-size:0.8rem; font-weight:700; }
+.dot { width:10px; height:10px; border-radius:50%; }
+.dot-jp { background:var(--jp); } .dot-pp { background:var(--pp); }
+.settle-card { background:var(--white); border-radius:var(--radius); padding:20px; text-align:center; border:2px dashed var(--border); margin-bottom:14px; }
+.settle-card.jp-owes { border-color:var(--jp-light); background:var(--jp-pale); }
+.settle-card.pp-owes { border-color:var(--pp-light); background:var(--pp-pale); }
+.settle-card.even { border-color:#ffd93d; background:#fffdf0; }
+.settle-emoji { font-size:2.2rem; margin-bottom:8px; }
+.settle-label { font-size:0.75rem; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:0.08em; }
+.settle-amount { font-family:'Nunito',sans-serif; font-size:2rem; font-weight:900; margin:6px 0; }
+.settle-card.jp-owes .settle-amount { color:var(--jp); }
+.settle-card.pp-owes .settle-amount { color:var(--pp); }
+.settle-card.even .settle-amount { color:#c9a000; }
+.settle-desc { font-size:0.83rem; color:var(--text); line-height:1.6; white-space:pre-line; }
+
+/* EXPORT */
+.export-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.btn-export { padding:12px 10px; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--white); font-family:'Sarabun',sans-serif; font-size:0.82rem; font-weight:700; cursor:pointer; text-align:center; transition:all 0.2s; color:var(--text); touch-action:manipulation; line-height:1.4; }
+.btn-export.csv { border-color:#34a853; color:#34a853; background:#f0fff4; }
+.btn-export.json { border-color:#4285f4; color:#4285f4; background:#f0f4ff; }
+.btn-import { border-color:#fbbc04; color:#9a7000; background:#fffdf0; }
+.btn-export.share { border-color:var(--jp); color:#3a8c55; background:var(--jp-pale); }
+.gsheet-tip { background:var(--jp-pale); border:1.5px solid var(--jp-light); border-radius:var(--radius-sm); padding:12px 14px; font-size:0.78rem; color:var(--text); line-height:1.6; margin-top:10px; }
+.gsheet-tip strong { color:var(--jp); }
+
+/* ENTRIES */
+.entries-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.btn-clear { background:none; border:1.5px solid var(--border); border-radius:50px; color:var(--muted); font-family:'Sarabun',sans-serif; font-size:0.75rem; font-weight:600; padding:5px 12px; cursor:pointer; touch-action:manipulation; }
+.count-badge { background:var(--jp-soft); color:var(--jp); font-size:0.68rem; font-weight:800; padding:2px 7px; border-radius:50px; margin-left:4px; }
+.count-badge.wish { background:var(--wish-soft); color:var(--wish); }
+.entry-item { background:var(--white); border-radius:var(--radius-sm); padding:14px; margin-bottom:10px; border:1.5px solid var(--border); border-left:4px solid var(--jp); animation:slideIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+.entry-item.pp-paid { border-left-color:var(--pp); }
+.entry-item.settled { opacity:0.65; border-left-color:#aaa; background:#fafafa; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+.entry-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:7px; }
+.entry-name { font-weight:700; font-size:0.95rem; color:var(--text); }
+.entry-name.crossed { text-decoration:line-through; color:var(--muted); }
+.entry-date { font-size:0.71rem; color:var(--muted); margin-top:2px; }
+.entry-amount { font-family:'Nunito',sans-serif; font-size:1.1rem; font-weight:800; color:var(--text); white-space:nowrap; }
+.entry-tags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+.tag { font-size:0.71rem; font-weight:700; padding:3px 9px; border-radius:50px; }
+.tag-jp { background:var(--jp-soft); color:#3a8c55; }
+.tag-pp { background:var(--pp-soft); color:#6a3ea0; }
+.tag-split { background:#f2f2f2; color:var(--muted); }
+.tag-settled { background:#e8f5e9; color:#2e7d32; }
+.entry-share { font-size:0.77rem; color:var(--muted); margin-bottom:7px; }
+.entry-owe { font-size:0.79rem; font-weight:700; padding:5px 10px; border-radius:8px; display:inline-block; margin-bottom:8px; }
+.owe-jp { background:var(--jp-soft); color:#3a8c55; }
+.owe-pp { background:var(--pp-soft); color:#6a3ea0; }
+.owe-even { background:#fffbea; color:#b8860b; }
+.entry-actions { display:flex; gap:7px; flex-wrap:wrap; }
+.btn-edit,.btn-del,.btn-paid,.btn-settle { padding:6px 13px; border-radius:8px; border:1.5px solid; font-family:'Sarabun',sans-serif; font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.2s; touch-action:manipulation; }
+.btn-edit { border-color:var(--jp-light); background:var(--jp-pale); color:var(--jp); }
+.btn-edit:active { background:var(--jp); color:white; }
+.btn-del { border-color:#ffd6d6; background:#fff5f5; color:#e05555; }
+.btn-del:active { background:#e05555; color:white; border-color:#e05555; }
+.btn-settle { border-color:#c8e6c9; background:#f1f8e9; color:#2e7d32; font-weight:700; }
+.btn-settle:active { background:#2e7d32; color:white; }
+.btn-settle.done { border-color:#aaa; background:#f5f5f5; color:#aaa; font-weight:600; }
+
+/* WISHLIST */
+.wish-item { background:var(--white); border-radius:var(--radius-sm); padding:14px; margin-bottom:10px; border:1.5px solid var(--wish-light); border-left:4px solid var(--wish); animation:slideIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+.wish-item.bought { border-left-color:var(--jp); opacity:0.6; }
+.wish-item-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }
+.wish-item-name { font-weight:700; font-size:0.95rem; }
+.wish-item.bought .wish-item-name { text-decoration:line-through; color:var(--muted); }
+.wish-price { font-family:'Nunito',sans-serif; font-size:1.05rem; font-weight:800; color:var(--wish); white-space:nowrap; }
+.wish-item.bought .wish-price { color:var(--jp); }
+.wish-tags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+.tag-wish { background:var(--wish-soft); color:var(--wish); }
+.tag-who-jp { background:var(--jp-soft); color:#3a8c55; }
+.tag-who-pp { background:var(--pp-soft); color:#6a3ea0; }
+.tag-who-both { background:#f5f0ff; color:#7050aa; }
+.tag-bought { background:var(--jp-soft); color:#3a8c55; }
+.btn-paid { border-color:var(--wish-light); background:var(--wish-pale); color:var(--wish); font-weight:700; }
+.btn-paid:active { background:var(--wish); color:white; }
+.wish-section-title { font-family:'Nunito',sans-serif; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin:16px 0 8px; padding-left:4px; }
+.empty-state { text-align:center; padding:36px 0; color:var(--muted); }
+.empty-state .big-emoji { font-size:3rem; margin-bottom:10px; }
+.empty-state p { font-size:0.88rem; line-height:1.6; }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(58,45,50,0.45); z-index:100; backdrop-filter:blur(5px); align-items:flex-end; justify-content:center; padding:0; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--white); border-radius:var(--radius) var(--radius) 0 0; padding:22px 18px 32px; width:100%; max-width:480px; animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1); max-height:90vh; overflow-y:auto; }
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-handle { width:36px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 16px; }
+.modal-title { font-family:'Nunito',sans-serif; font-size:1.1rem; font-weight:800; color:var(--jp); margin-bottom:16px; }
+.modal-title.wish { color:var(--wish); }
+.modal-btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+.btn-cancel { padding:12px; border-radius:var(--radius-sm); border:1.5px solid var(--border); background:var(--white); color:var(--muted); font-family:'Sarabun',sans-serif; font-size:0.9rem; font-weight:600; cursor:pointer; }
+.btn-save { padding:12px; border-radius:var(--radius-sm); border:none; background:linear-gradient(135deg,var(--jp),#7dd49a); color:white; font-family:'Nunito',sans-serif; font-size:0.9rem; font-weight:800; cursor:pointer; box-shadow:0 3px 12px rgba(91,191,122,0.4); }
+.btn-save.wish { background:linear-gradient(135deg,var(--wish),var(--wish-light)); box-shadow:0 3px 12px rgba(255,143,171,0.4); }
+.paid-confirm { background:var(--wish-pale); border-radius:var(--radius-sm); padding:14px; text-align:center; margin-bottom:14px; border:1.5px solid var(--wish-light); }
+.paid-confirm .emoji { font-size:2rem; margin-bottom:6px; }
+.paid-confirm p { font-size:0.88rem; color:var(--text); line-height:1.6; white-space:pre-line; }
+
+/* SETTLE CONFIRM */
+.settle-confirm { background:#f1f8e9; border-radius:var(--radius-sm); padding:14px; text-align:center; margin-bottom:14px; border:1.5px solid #c8e6c9; }
+.settle-confirm .emoji { font-size:2rem; margin-bottom:6px; }
+.settle-confirm p { font-size:0.88rem; color:var(--text); line-height:1.6; white-space:pre-line; }
+
+/* TOAST */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:white; padding:10px 20px; border-radius:50px; font-size:0.82rem; font-weight:600; z-index:200; transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1); pointer-events:none; white-space:nowrap; }
+.toast.show { transform:translateX(-50%) translateY(0); }
+
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+input[type=file] { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo"><span class="jp">JP</span><span class="pp">PP</span><span class="app">App 🌿</span></div>
+    <div class="tagline">บันทึกค่าใช้จ่ายและของอยากได้ 💕</div>
+    <div class="sync-bar local" id="syncBar"><div class="sync-dot"></div><span id="syncText">ยังไม่ได้เชื่อม Google Sheets</span></div>
+  </div>
+
+  <!-- SETUP CARD (แสดงถ้ายังไม่มี script URL) -->
+  <div id="setupCard" class="setup-card" style="display:none">
+    <h3>🔗 เชื่อม Google Sheets</h3>
+    <p>วาง Script URL ที่ได้จาก Google Apps Script เพื่อให้ข้อมูลซิงก์ข้ามเครื่องได้</p>
+    <div class="setup-steps">
+      <strong>วิธี deploy Apps Script (ทำครั้งเดียว ~5 นาที):</strong><br>
+      1. เปิด <code>script.google.com</code> → New Project<br>
+      2. Copy โค้ดจากไฟล์ <code>jppp-apps-script.js</code> วางทับทั้งหมด<br>
+      3. บันทึก → Deploy → New deployment → Web app<br>
+      4. Execute as: <strong>Me</strong> · Who has access: <strong>Anyone</strong><br>
+      5. Copy URL มาวางด้านล่าง
+    </div>
+    <input class="setup-input" type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/AK.../exec">
+    <button class="btn-setup" onclick="saveScriptUrl()">✅ เชื่อมต่อ Google Sheets</button>
+    <button class="btn-skip" onclick="skipSetup()">ข้ามก่อน ใช้แบบ offline</button>
+  </div>
+
+  <div class="nav">
+    <button class="nav-btn active" id="nav-dash" onclick="switchTab('dash')">📊 สรุป</button>
+    <button class="nav-btn" id="nav-add" onclick="switchTab('add')">➕ เพิ่ม</button>
+    <button class="nav-btn" id="nav-list" onclick="switchTab('list')">📋 รายการ</button>
+    <button class="nav-btn" id="nav-wish" onclick="switchTab('wish')">🛍️ อยากได้</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dash" class="tab-content active">
+    <div class="dash-hero">
+      <div class="hero-label">💰 ค่าใช้จ่ายรวมทั้งหมด</div>
+      <div class="hero-amount" id="heroTotal">฿0.00</div>
+      <div class="hero-sub" id="heroSub">ยังไม่มีรายการ</div>
+    </div>
+    <div class="dash-grid">
+      <div class="stat-card jp"><div class="stat-avatar">🌿</div><div class="stat-name">JP จ่ายไปแล้ว</div><div class="stat-amount" id="statPaidJP">฿0</div><div class="stat-sub" id="statOwedJP">—</div></div>
+      <div class="stat-card pp"><div class="stat-avatar">💜</div><div class="stat-name">PP จ่ายไปแล้ว</div><div class="stat-amount" id="statPaidPP">฿0</div><div class="stat-sub" id="statOwedPP">—</div></div>
+      <div class="stat-card jp" style="background:#f5fdf8"><div class="stat-name">JP ควรจ่าย</div><div class="stat-amount" id="statShareJP">฿0</div><div class="stat-sub">ตามสัดส่วน</div></div>
+      <div class="stat-card pp" style="background:#faf5ff"><div class="stat-name">PP ควรจ่าย</div><div class="stat-amount" id="statSharePP">฿0</div><div class="stat-sub">ตามสัดส่วน</div></div>
+    </div>
+    <div class="donut-wrap">
+      <div class="donut-title">📊 สัดส่วนค่าใช้จ่ายรวม</div>
+      <div class="big-bar-wrap"><div class="big-bar-jp" id="bigBarJP" style="width:50%">JP</div></div>
+      <div class="bar-row">
+        <div class="bar-legend"><div class="dot dot-jp"></div> JP <strong id="pctJP">50%</strong></div>
+        <div class="bar-legend"><div class="dot dot-pp"></div> PP <strong id="pctPP">50%</strong></div>
+      </div>
+    </div>
+    <div class="settle-card" id="settleCard">
+      <div class="settle-emoji" id="settleEmoji">🌿</div>
+      <div class="settle-label" id="settleLabel">ยังไม่มีข้อมูล</div>
+      <div class="settle-amount" id="settleAmount">฿0</div>
+      <div class="settle-desc" id="settleDesc">เพิ่มรายการเพื่อดูว่าใครต้องจ่ายคืน</div>
+    </div>
+    <div class="wish-mini">
+      <div class="wish-mini-icon">🛍️</div>
+      <div class="wish-mini-text">
+        <div class="wish-mini-label">ของอยากได้ที่รออยู่</div>
+        <div class="wish-mini-amount" id="wishMiniAmt">฿0</div>
+        <div class="wish-mini-sub" id="wishMiniSub">ยังไม่มีรายการ</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📤 Export / Backup</div>
+      <div class="export-grid">
+        <button class="btn-export csv" onclick="exportCSV()">📊 Export CSV<br><span style="font-weight:400;font-size:0.7rem">→ Google Sheets</span></button>
+        <button class="btn-export json" onclick="exportJSON()">💾 Backup JSON<br><span style="font-weight:400;font-size:0.7rem">สำรองข้อมูล</span></button>
+        <button class="btn-export btn-import" onclick="document.getElementById('importFile').click()">📥 Import JSON<br><span style="font-weight:400;font-size:0.7rem">กู้คืนข้อมูล</span></button>
+        <button class="btn-export share" onclick="copyShareText()">📋 Copy สรุป<br><span style="font-weight:400;font-size:0.7rem">แชร์ให้แฟน</span></button>
+      </div>
+      <input type="file" id="importFile" accept=".json" onchange="importJSON(this)">
+      <div class="gsheet-tip" id="sheetTip">
+        <strong>🔗 Google Sheets:</strong> ยังไม่ได้เชื่อม<br>
+        <button style="margin-top:6px;padding:5px 12px;border-radius:8px;border:1.5px solid var(--jp-light);background:var(--jp-pale);color:var(--jp);font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="showSetup()">⚙️ ตั้งค่าการเชื่อมต่อ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD -->
+  <div id="tab-add" class="tab-content">
+    <div class="card">
+      <div class="card-title">✨ เพิ่มรายการค่าใช้จ่าย</div>
+      <div class="form-row"><label>ชื่อร้าน / รายการ 🍽️</label><input type="text" id="fName" placeholder="เช่น หมูกระทะ, สเต็ก..."></div>
+      <div class="two-col form-row">
+        <div><label>ราคารวม (฿)</label><input type="number" id="fAmount" placeholder="0.00" min="0" step="0.01" inputmode="decimal"></div>
+        <div><label>วันที่</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="form-row">
+        <label>แบ่งจ่ายยังไง ✂️</label>
+        <div class="split-chips">
+          <button class="chip active" onclick="setChip(50,this)">50/50</button>
+          <button class="chip" onclick="setChip(60,this)">60/40</button>
+          <button class="chip" onclick="setChip(65,this)">65/35</button>
+          <button class="chip" onclick="setChip(70,this)">70/30</button>
+          <button class="chip" onclick="setChip(100,this)">JP ทั้งหมด</button>
+          <button class="chip" onclick="setChip(0,this)">PP ทั้งหมด</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:0.8rem;color:var(--muted);font-weight:600">JP</span>
+          <input type="number" id="fSplit" value="50" min="0" max="100" style="width:72px;text-align:center" oninput="onCustomSplit(this.value)" inputmode="numeric">
+          <span style="font-size:0.8rem;color:var(--muted);font-weight:600">%</span>
+        </div>
+        <div class="split-bar-wrap"><div class="split-bar-fill" id="splitBarFill" style="width:50%"></div></div>
+        <div class="split-labels"><span class="lbl-jp" id="splitLblJP">JP 50%</span><span class="lbl-pp" id="splitLblPP">PP 50%</span></div>
+      </div>
+      <div class="form-row">
+        <label>ใครจ่ายก่อน? 💳</label>
+        <div class="payer-row">
+          <button class="payer-btn jp active" id="payJP" onclick="setPayer('jp')">🌿 JP จ่าย</button>
+          <button class="payer-btn pp" id="payPP" onclick="setPayer('pp')">💜 PP จ่าย</button>
+        </div>
+      </div>
+      <button class="btn-add" onclick="addEntry()">+ เพิ่มรายการ 🌿</button>
+    </div>
+  </div>
+
+  <!-- LIST -->
+  <div id="tab-list" class="tab-content">
+    <div class="card">
+      <div class="entries-header">
+        <div class="card-title" style="margin:0">📋 รายการ <span class="count-badge" id="countBadge">0</span></div>
+        <button class="btn-clear" onclick="clearAll()">🗑️ ล้าง</button>
+      </div>
+      <div id="entriesList"><div class="empty-state"><div class="big-emoji">🍽️</div><p>ยังไม่มีรายการ<br>ไปเพิ่มรายการแรกกันเลย! 💕</p></div></div>
+    </div>
+  </div>
+
+  <!-- WISHLIST -->
+  <div id="tab-wish" class="tab-content">
+    <div class="card wish-form">
+      <div class="card-title wish">🛍️ เพิ่มของอยากได้</div>
+      <div class="form-row"><label>ชื่อสินค้า / ของที่อยากได้</label><input type="text" id="wName" placeholder="เช่น รองเท้า New Balance, กระเป๋า..."></div>
+      <div class="two-col form-row">
+        <div><label>ราคาโดยประมาณ (฿)</label><input type="number" id="wPrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal"></div>
+        <div><label>ใครอยากได้</label>
+          <select id="wWho"><option value="both">💕 ทั้งคู่</option><option value="jp">🌿 JP</option><option value="pp">💜 PP</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label>หมายเหตุ / link (ไม่จำเป็น)</label><input type="text" id="wNote" placeholder="link สินค้า หรือรายละเอียด..."></div>
+      <button class="btn-add wish-btn" onclick="addWish()">+ เพิ่มของอยากได้ 🛍️</button>
+    </div>
+    <div class="card">
+      <div class="entries-header">
+        <div class="card-title wish" style="margin:0">รายการที่รออยู่ <span class="count-badge wish" id="wishCountBadge">0</span></div>
+        <button class="btn-clear" onclick="clearWishes()">🗑️ ล้าง</button>
+      </div>
+      <div id="wishList"><div class="empty-state"><div class="big-emoji">🛒</div><p>ยังไม่มีของอยากได้<br>เพิ่มรายการแรกเลย! 🌸</p></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT EXPENSE MODAL -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ แก้ไขรายการ</div>
+    <input type="hidden" id="editId">
+    <div class="form-row"><label>ชื่อร้าน / รายการ</label><input type="text" id="editName"></div>
+    <div class="two-col form-row">
+      <div><label>ราคา (฿)</label><input type="number" id="editAmount" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label>วันที่</label><input type="date" id="editDate"></div>
+    </div>
+    <div class="form-row"><label>JP จ่าย (%)</label><input type="number" id="editSplit" min="0" max="100" inputmode="numeric"></div>
+    <div class="form-row"><label>ใครจ่ายก่อน</label>
+      <select id="editPayer"><option value="jp">🌿 JP จ่าย</option><option value="pp">💜 PP จ่าย</option></select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('editModal')">ยกเลิก</button>
+      <button class="btn-save" onclick="saveEdit()">บันทึก ✨</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTLE MODAL -->
+<div class="modal-overlay" id="settleModal" onclick="if(event.target===this)closeModal('settleModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✅ บันทึกการจ่ายคืน</div>
+    <input type="hidden" id="settleId">
+    <div class="settle-confirm">
+      <div class="emoji">💸✅</div>
+      <p id="settleConfirmText">ยืนยันว่าจ่ายคืนแล้ว?</p>
+    </div>
+    <div class="form-row"><label>วันที่จ่ายคืน</label><input type="date" id="settleDate"></div>
+    <div class="form-row"><label>หมายเหตุ (ไม่จำเป็น)</label><input type="text" id="settleNote" placeholder="เช่น โอนแล้ว, จ่ายสด..."></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('settleModal')">ยกเลิก</button>
+      <button class="btn-save" onclick="confirmSettle()">✅ จ่ายคืนแล้ว!</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT WISH MODAL -->
+<div class="modal-overlay" id="editWishModal" onclick="if(event.target===this)closeModal('editWishModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title wish">✏️ แก้ไขของอยากได้</div>
+    <input type="hidden" id="ewId">
+    <div class="form-row"><label>ชื่อสินค้า</label><input type="text" id="ewName"></div>
+    <div class="two-col form-row">
+      <div><label>ราคา (฿)</label><input type="number" id="ewPrice" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label>ใครอยากได้</label>
+        <select id="ewWho"><option value="both">💕 ทั้งคู่</option><option value="jp">🌿 JP</option><option value="pp">💜 PP</option></select>
+      </div>
+    </div>
+    <div class="form-row"><label>หมายเหตุ</label><input type="text" id="ewNote"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('editWishModal')">ยกเลิก</button>
+      <button class="btn-save wish" onclick="saveWishEdit()">บันทึก ✨</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAID MODAL (wish → expense) -->
+<div class="modal-overlay" id="paidModal" onclick="if(event.target===this)closeModal('paidModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title wish">🎉 จ่ายแล้ว!</div>
+    <input type="hidden" id="paidWishId">
+    <div class="paid-confirm"><div class="emoji">🛍️✅</div><p id="paidConfirmText">ต้องการย้ายรายการนี้เป็นค่าใช้จ่ายไหม?</p></div>
+    <div class="form-row"><label>ราคาที่จ่ายจริง (฿)</label><input type="number" id="paidAmount" min="0" step="0.01" inputmode="decimal"></div>
+    <div class="two-col form-row">
+      <div><label>วันที่ซื้อ</label><input type="date" id="paidDate"></div>
+      <div><label>ใครจ่ายก่อน</label>
+        <select id="paidPayer"><option value="jp">🌿 JP จ่าย</option><option value="pp">💜 PP จ่าย</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>JP จ่าย (%)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="paidSplit" value="50" min="0" max="100" style="width:72px;text-align:center" inputmode="numeric" oninput="document.getElementById('paidSplitPP').textContent=100-(parseInt(this.value)||0)">
+        <span style="font-size:0.8rem;color:var(--muted);font-weight:600">%</span>
+        <span style="font-size:0.78rem;color:var(--muted)">(PP = <span id="paidSplitPP">50</span>%)</span>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('paidModal')">ยกเลิก</button>
+      <button class="btn-save wish" onclick="confirmPaid()">✅ ยืนยัน จ่ายแล้ว!</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let entries = JSON.parse(localStorage.getItem('jppp_v2') || '[]');
+let wishes  = JSON.parse(localStorage.getItem('jppp_wish') || '[]');
+let SCRIPT_URL = localStorage.getItem('jppp_script_url') || '';
+let curSplit = 50, curPayer = 'jp';
+let syncing = false;
+
+document.getElementById('fDate').valueAsDate = new Date();
+
+// ─── UTILS ───────────────────────────────────────────────
+const fmt = n => '฿' + n.toLocaleString('th-TH', {minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate = s => { if(!s) return ''; const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+function showToast(msg, dur=2200) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+
+function setSyncBar(state, text) {
+  const b=document.getElementById('syncBar'); b.className='sync-bar '+state;
+  document.getElementById('syncText').textContent=text;
+}
+
+// ─── SETUP / SCRIPT URL ──────────────────────────────────
+function showSetup() {
+  document.getElementById('setupCard').style.display='block';
+  document.getElementById('scriptUrlInput').value=SCRIPT_URL;
+  document.getElementById('setupCard').scrollIntoView({behavior:'smooth'});
+}
+function saveScriptUrl() {
+  const url=document.getElementById('scriptUrlInput').value.trim();
+  if(!url.includes('script.google.com')) { alert('URL ไม่ถูกต้อง กรุณาใส่ URL จาก Google Apps Script'); return; }
+  SCRIPT_URL=url; localStorage.setItem('jppp_script_url',url);
+  document.getElementById('setupCard').style.display='none';
+  updateSheetTip(); loadFromSheet();
+}
+function skipSetup() { document.getElementById('setupCard').style.display='none'; }
+
+function updateSheetTip() {
+  const tip=document.getElementById('sheetTip');
+  if(SCRIPT_URL) {
+    tip.innerHTML=`<strong>🟢 เชื่อมแล้ว:</strong> ข้อมูลซิงก์กับ Google Sheets อัตโนมัติ<br>
+    <button style="margin-top:6px;padding:5px 12px;border-radius:8px;border:1.5px solid var(--jp-light);background:var(--jp-pale);color:var(--jp);font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="loadFromSheet()">🔄 โหลดข้อมูลใหม่</button>
+    <button style="margin-top:6px;margin-left:6px;padding:5px 12px;border-radius:8px;border:1.5px solid #ffd6d6;background:#fff5f5;color:#e05555;font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="disconnectSheet()">🔌 ยกเลิกการเชื่อม</button>`;
+  } else {
+    tip.innerHTML=`<strong>🔗 Google Sheets:</strong> ยังไม่ได้เชื่อม<br>
+    <button style="margin-top:6px;padding:5px 12px;border-radius:8px;border:1.5px solid var(--jp-light);background:var(--jp-pale);color:var(--jp);font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="showSetup()">⚙️ ตั้งค่าการเชื่อมต่อ</button>`;
+  }
+}
+function disconnectSheet() {
+  if(!confirm('ยกเลิกการเชื่อม Google Sheets ใช่ไหม?\nข้อมูลที่อยู่ใน localStorage จะยังอยู่')) return;
+  SCRIPT_URL=''; localStorage.removeItem('jppp_script_url');
+  setSyncBar('local','ยังไม่ได้เชื่อม Google Sheets'); updateSheetTip();
+}
+
+// ─── GOOGLE SHEETS SYNC ──────────────────────────────────
+async function callSheet(payload) {
+  if(!SCRIPT_URL) return null;
+  try {
+    setSyncBar('loading','กำลังซิงก์...');
+    const res = await fetch(SCRIPT_URL, {
+      method:'POST', body:JSON.stringify(payload),
+      headers:{'Content-Type':'text/plain'}   // Apps Script requires text/plain for no-CORS
+    });
+    const data = await res.json();
+    setSyncBar('ok','ซิงก์แล้ว ✅');
+    return data;
+  } catch(err) {
+    setSyncBar('error','ซิงก์ไม่ได้ (offline mode) ⚠️');
+    return null;
+  }
+}
+
+async function loadFromSheet() {
+  if(!SCRIPT_URL) return;
+  setSyncBar('loading','กำลังโหลดจาก Google Sheets...');
+  try {
+    const url = SCRIPT_URL + '?action=getAll';
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.entries) { entries=data.entries; localStorage.setItem('jppp_v2',JSON.stringify(entries)); }
+    if(data.wishes)  { wishes=data.wishes;  localStorage.setItem('jppp_wish',JSON.stringify(wishes)); }
+    setSyncBar('ok',`โหลดสำเร็จ · ${entries.length} รายการ ✅`);
+    renderAll();
+    showToast('🔄 โหลดข้อมูลจาก Google Sheets แล้ว');
+  } catch(err) {
+    setSyncBar('error','โหลดไม่ได้ ใช้ข้อมูลใน localStorage แทน');
+  }
+}
+
+// ─── TAB ─────────────────────────────────────────────────
+function switchTab(t) {
+  ['dash','add','list','wish'].forEach(id => {
+    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+    const btn=document.getElementById('nav-'+id);
+    btn.classList.toggle('active',id===t);
+    btn.classList.toggle('wish-nav',id===t&&t==='wish');
+  });
+  renderAll();
+}
+
+// ─── FORM CONTROLS ───────────────────────────────────────
+function setChip(val,btn) {
+  curSplit=val; document.getElementById('fSplit').value=val;
+  document.querySelectorAll('.chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); updateSplitBar();
+}
+function onCustomSplit(v) {
+  curSplit=Math.min(100,Math.max(0,parseFloat(v)||0));
+  document.querySelectorAll('.chip').forEach(b=>b.classList.remove('active')); updateSplitBar();
+}
+function updateSplitBar() {
+  document.getElementById('splitBarFill').style.width=curSplit+'%';
+  document.getElementById('splitLblJP').textContent=`JP ${curSplit}%`;
+  document.getElementById('splitLblPP').textContent=`PP ${100-curSplit}%`;
+}
+function setPayer(p) {
+  curPayer=p;
+  document.getElementById('payJP').classList.toggle('active',p==='jp');
+  document.getElementById('payPP').classList.toggle('active',p==='pp');
+}
+
+// ─── ADD ENTRY ───────────────────────────────────────────
+async function addEntry() {
+  const name=document.getElementById('fName').value.trim();
+  const amount=parseFloat(document.getElementById('fAmount').value);
+  const date=document.getElementById('fDate').value;
+  if(!name){alert('กรุณาใส่ชื่อร้าน 🙏');return;}
+  if(!amount||amount<=0){alert('กรุณาใส่ราคา 🙏');return;}
+  const entry={id:Date.now(),name,amount,date,splitJP:curSplit,payer:curPayer,settled:false,settledDate:'',settledNote:''};
+  entries.unshift(entry);
+  save(); renderAll();
+  document.getElementById('fName').value='';
+  document.getElementById('fAmount').value='';
+  document.getElementById('fDate').valueAsDate=new Date();
+  switchTab('list');
+  showToast('✅ เพิ่มรายการแล้ว');
+  // sync to sheet
+  const res = await callSheet({action:'addEntry', entry});
+  if(res&&res.id) { entry.sheetRowId=res.id; save(); }
+}
+
+// ─── SETTLE (จ่ายคืนแล้ว) ────────────────────────────────
+function openSettle(id) {
+  const e=entries.find(x=>x.id===id); if(!e) return;
+  const sJP=e.amount*e.splitJP/100, sPP=e.amount*(100-e.splitJP)/100;
+  const diff=(e.payer==='jp'?e.amount:0)-sJP;
+  let msg='';
+  if(Math.abs(diff)<0.01) msg='รายการนี้หารเท่ากันอยู่แล้ว';
+  else if(diff>0) msg=`PP ต้องจ่ายคืน JP ${fmt(sPP)}\nกดยืนยันเมื่อจ่ายคืนแล้ว`;
+  else msg=`JP ต้องจ่ายคืน PP ${fmt(sJP)}\nกดยืนยันเมื่อจ่ายคืนแล้ว`;
+  document.getElementById('settleId').value=id;
+  document.getElementById('settleConfirmText').textContent=msg;
+  document.getElementById('settleDate').value=todayStr();
+  document.getElementById('settleNote').value='';
+  document.getElementById('settleModal').classList.add('open');
+}
+async function confirmSettle() {
+  const id=parseInt(document.getElementById('settleId').value);
+  const idx=entries.findIndex(x=>x.id===id); if(idx===-1) return;
+  entries[idx].settled=true;
+  entries[idx].settledDate=document.getElementById('settleDate').value;
+  entries[idx].settledNote=document.getElementById('settleNote').value;
+  save(); renderAll(); closeModal('settleModal');
+  showToast('💸 บันทึกการจ่ายคืนแล้ว!');
+  await callSheet({action:'settleEntry', id, settledDate:entries[idx].settledDate, settledNote:entries[idx].settledNote});
+}
+
+// ─── DELETE / CLEAR ──────────────────────────────────────
+async function deleteEntry(id) {
+  if(!confirm('ลบรายการนี้ใช่ไหม?')) return;
+  entries=entries.filter(e=>e.id!==id); save(); renderAll();
+  showToast('🗑️ ลบแล้ว');
+  await callSheet({action:'deleteEntry',id});
+}
+async function clearAll() {
+  if(!entries.length) return;
+  if(!confirm('ล้างรายการทั้งหมดเลยนะ? 🥺')) return;
+  entries=[]; save(); renderAll();
+  await callSheet({action:'clearEntries'});
+}
+
+// ─── EDIT ENTRY ──────────────────────────────────────────
+function openEdit(id) {
+  const e=entries.find(x=>x.id===id); if(!e) return;
+  document.getElementById('editId').value=e.id;
+  document.getElementById('editName').value=e.name;
+  document.getElementById('editAmount').value=e.amount;
+  document.getElementById('editDate').value=e.date||'';
+  document.getElementById('editSplit').value=e.splitJP;
+  document.getElementById('editPayer').value=e.payer;
+  document.getElementById('editModal').classList.add('open');
+}
+async function saveEdit() {
+  const id=parseInt(document.getElementById('editId').value);
+  const idx=entries.findIndex(x=>x.id===id); if(idx===-1) return;
+  const updated={...entries[idx], name:document.getElementById('editName').value.trim(), amount:parseFloat(document.getElementById('editAmount').value)||0, date:document.getElementById('editDate').value, splitJP:parseFloat(document.getElementById('editSplit').value)||0, payer:document.getElementById('editPayer').value};
+  entries[idx]=updated; save(); renderAll(); closeModal('editModal');
+  showToast('✏️ แก้ไขแล้ว');
+  await callSheet({action:'updateEntry',entry:updated});
+}
+
+// ─── WISHLIST ────────────────────────────────────────────
+async function addWish() {
+  const name=document.getElementById('wName').value.trim();
+  const price=parseFloat(document.getElementById('wPrice').value)||0;
+  const who=document.getElementById('wWho').value;
+  const note=document.getElementById('wNote').value.trim();
+  if(!name){alert('กรุณาใส่ชื่อสินค้า 🙏');return;}
+  const wish={id:Date.now(),name,price,who,note,bought:false};
+  wishes.unshift(wish); saveWishes(); renderAll();
+  document.getElementById('wName').value='';
+  document.getElementById('wPrice').value='';
+  document.getElementById('wNote').value='';
+  switchTab('wish');
+  showToast('🛍️ เพิ่มของอยากได้แล้ว');
+  const res=await callSheet({action:'addWish',wish});
+  if(res&&res.id){wish.sheetRowId=res.id; saveWishes();}
+}
+async function deleteWish(id) {
+  if(!confirm('ลบรายการนี้ใช่ไหม?')) return;
+  wishes=wishes.filter(w=>w.id!==id); saveWishes(); renderAll();
+  showToast('🗑️ ลบแล้ว');
+  await callSheet({action:'deleteWish',id});
+}
+async function clearWishes() {
+  if(!wishes.length) return;
+  if(!confirm('ล้างรายการของอยากได้ทั้งหมด? 🥺')) return;
+  wishes=[]; saveWishes(); renderAll();
+  await callSheet({action:'clearWishes'});
+}
+function openEditWish(id) {
+  const w=wishes.find(x=>x.id===id); if(!w) return;
+  document.getElementById('ewId').value=w.id;
+  document.getElementById('ewName').value=w.name;
+  document.getElementById('ewPrice').value=w.price;
+  document.getElementById('ewWho').value=w.who;
+  document.getElementById('ewNote').value=w.note||'';
+  document.getElementById('editWishModal').classList.add('open');
+}
+async function saveWishEdit() {
+  const id=parseInt(document.getElementById('ewId').value);
+  const idx=wishes.findIndex(x=>x.id===id); if(idx===-1) return;
+  const updated={...wishes[idx],name:document.getElementById('ewName').value.trim(),price:parseFloat(document.getElementById('ewPrice').value)||0,who:document.getElementById('ewWho').value,note:document.getElementById('ewNote').value.trim()};
+  wishes[idx]=updated; saveWishes(); renderAll(); closeModal('editWishModal');
+  showToast('✏️ แก้ไขแล้ว');
+  await callSheet({action:'updateWish',wish:updated});
+}
+function openPaidModal(id) {
+  const w=wishes.find(x=>x.id===id); if(!w) return;
+  document.getElementById('paidWishId').value=id;
+  document.getElementById('paidAmount').value=w.price||'';
+  document.getElementById('paidDate').valueAsDate=new Date();
+  document.getElementById('paidSplit').value=50;
+  document.getElementById('paidSplitPP').textContent=50;
+  document.getElementById('paidPayer').value='jp';
+  document.getElementById('paidConfirmText').textContent=`"${w.name}" จ่ายไปแล้ว!\nต้องการเพิ่มเป็นรายการค่าใช้จ่ายด้วยไหม?`;
+  document.getElementById('paidModal').classList.add('open');
+}
+async function confirmPaid() {
+  const id=parseInt(document.getElementById('paidWishId').value);
+  const w=wishes.find(x=>x.id===id); if(!w) return;
+  const amount=parseFloat(document.getElementById('paidAmount').value);
+  if(!amount||amount<=0){alert('กรุณาใส่ราคา 🙏');return;}
+  const date=document.getElementById('paidDate').value;
+  const payer=document.getElementById('paidPayer').value;
+  const splitJP=parseFloat(document.getElementById('paidSplit').value)||50;
+  const entry={id:Date.now(),name:w.name,amount,date,splitJP,payer,settled:false,settledDate:'',settledNote:'',fromWish:true};
+  entries.unshift(entry);
+  const idx=wishes.findIndex(x=>x.id===id);
+  wishes[idx]={...wishes[idx],bought:true,boughtDate:date,boughtAmount:amount};
+  save(); saveWishes(); renderAll(); closeModal('paidModal');
+  showToast(`🎉 "${w.name}" ย้ายเป็นรายจ่ายแล้ว!`);
+  await callSheet({action:'addEntry',entry});
+  await callSheet({action:'markWishBought',id,boughtDate:date,boughtAmount:amount});
+}
+
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function save(){localStorage.setItem('jppp_v2',JSON.stringify(entries));}
+function saveWishes(){localStorage.setItem('jppp_wish',JSON.stringify(wishes));}
+
+// ─── EXPORT / IMPORT ─────────────────────────────────────
+function exportCSV() {
+  if(!entries.length){alert('ยังไม่มีข้อมูล 🌿');return;}
+  const rows=[['วันที่','ร้าน/รายการ','ราคารวม','JP จ่าย%','PP จ่าย%','ใครจ่ายก่อน','JP ควรจ่าย','PP ควรจ่าย','JP ต้องจ่ายคืน','PP ต้องจ่ายคืน','สถานะ']];
+  entries.forEach(e=>{
+    const sJP=e.amount*e.splitJP/100,sPP=e.amount*(100-e.splitJP)/100;
+    const paidJP=e.payer==='jp'?e.amount:0,diff=paidJP-sJP;
+    rows.push([fmtDate(e.date),e.name,e.amount.toFixed(2),e.splitJP,100-e.splitJP,e.payer==='jp'?'JP':'PP',sJP.toFixed(2),sPP.toFixed(2),diff<0?Math.abs(diff).toFixed(2):'0.00',diff>0?diff.toFixed(2):'0.00',e.settled?'จ่ายคืนแล้ว':'ค้างอยู่']);
+  });
+  const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='JPPP_'+new Date().toLocaleDateString('th-TH').replace(/\//g,'-')+'.csv';a.click();
+}
+function exportJSON() {
+  if(!entries.length&&!wishes.length){alert('ยังไม่มีข้อมูล 🌿');return;}
+  const data=JSON.stringify({exported:new Date().toISOString(),entries,wishes},null,2);
+  const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  a.download='JPPP_backup_'+new Date().toLocaleDateString('th-TH').replace(/\//g,'-')+'.json';a.click();
+}
+function importJSON(input) {
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const imp=data.entries||data;
+      if(!Array.isArray(imp))throw new Error('invalid');
+      if(confirm(`พบ ${imp.length} รายการ\nทับข้อมูลเดิมไหม?\n(Cancel = เพิ่มต่อ)`)){entries=imp;if(data.wishes)wishes=data.wishes;}
+      else{entries=[...entries,...imp];if(data.wishes)wishes=[...wishes,...data.wishes];}
+      save();saveWishes();renderAll();showToast('✅ Import สำเร็จ!');
+    }catch{alert('ไฟล์ไม่ถูกต้อง 😢');}
+  };
+  reader.readAsText(file);input.value='';
+}
+function copyShareText() {
+  let paidJP=0,paidPP=0,shareJP=0,sharePP=0;
+  entries.forEach(e=>{if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
+  const total=paidJP+paidPP,diff=paidJP-shareJP;
+  const settle=diff>0.01?`PP ต้องจ่ายคืน JP: ${fmt(diff)}`:diff<-0.01?`JP ต้องจ่ายคืน PP: ${fmt(Math.abs(diff))}`:'✅ เท่ากันพอดี!';
+  const pending=wishes.filter(w=>!w.bought);
+  const wishText=pending.length?`\n🛍️ ของอยากได้อีก ${pending.length} รายการ`:'';
+  const text=`🌿💜 JPPP App สรุปค่าใช้จ่าย\n━━━━━━━━━━━━━━\n💰 รวมทั้งหมด: ${fmt(total)}\n🌿 JP จ่าย: ${fmt(paidJP)} | ควรจ่าย: ${fmt(shareJP)}\n💜 PP จ่าย: ${fmt(paidPP)} | ควรจ่าย: ${fmt(sharePP)}\n━━━━━━━━━━━━━━\n${settle}${wishText}\n(${entries.length} รายการ)`;
+  navigator.clipboard.writeText(text).then(()=>showToast('✅ Copy แล้ว! 💕')).catch(()=>alert(text));
+}
+
+// ─── RENDER ──────────────────────────────────────────────
+function renderAll(){renderDash();renderList();renderWish();}
+
+function renderDash() {
+  let paidJP=0,paidPP=0,shareJP=0,sharePP=0;
+  const activeEntries=entries.filter(e=>!e.settled);
+  entries.forEach(e=>{if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
+  const total=paidJP+paidPP;
+  document.getElementById('heroTotal').textContent=fmt(total);
+  document.getElementById('heroSub').textContent=entries.length?`${entries.length} รายการ · JP ${fmt(paidJP)} · PP ${fmt(paidPP)}`:'ยังไม่มีรายการ เพิ่มเลย! 🌿';
+  document.getElementById('statPaidJP').textContent=fmt(paidJP);
+  document.getElementById('statPaidPP').textContent=fmt(paidPP);
+  document.getElementById('statShareJP').textContent=fmt(shareJP);
+  document.getElementById('statSharePP').textContent=fmt(sharePP);
+  const diffJP=paidJP-shareJP;
+  // only show unsettled diff
+  let unsettledDiffJP=0;
+  activeEntries.forEach(e=>{const pj=e.payer==='jp'?e.amount:0;unsettledDiffJP+=pj-e.amount*e.splitJP/100;});
+  document.getElementById('statOwedJP').textContent=unsettledDiffJP>0.01?`PP ยังค้าง ${fmt(unsettledDiffJP)}`:unsettledDiffJP<-0.01?`JP ยังค้าง ${fmt(Math.abs(unsettledDiffJP))}`:'เท่ากัน ✅';
+  document.getElementById('statOwedPP').textContent=unsettledDiffJP<-0.01?`PP ยังค้าง ${fmt(Math.abs(unsettledDiffJP))}`:unsettledDiffJP>0.01?`PP ยังค้าง ${fmt(unsettledDiffJP)}`:'เท่ากัน ✅';
+  const pctJP=total>0?Math.round(shareJP/total*100):50;
+  document.getElementById('bigBarJP').style.width=pctJP+'%';
+  document.getElementById('bigBarJP').textContent=pctJP>18?`JP ${pctJP}%`:'';
+  document.getElementById('pctJP').textContent=pctJP+'%';
+  document.getElementById('pctPP').textContent=(100-pctJP)+'%';
+  const diff=paidJP-shareJP,sc=document.getElementById('settleCard');
+  if(!entries.length){sc.className='settle-card';document.getElementById('settleEmoji').textContent='🌿';document.getElementById('settleLabel').textContent='ยังไม่มีข้อมูล';document.getElementById('settleAmount').textContent='฿0';document.getElementById('settleDesc').textContent='เพิ่มรายการเพื่อดูว่าใครต้องจ่ายคืน';}
+  else if(Math.abs(diff)<0.01){sc.className='settle-card even';document.getElementById('settleEmoji').textContent='🎉';document.getElementById('settleLabel').textContent='เท่ากันพอดีเลย!';document.getElementById('settleAmount').textContent='฿0';document.getElementById('settleDesc').textContent='ไม่มีใครต้องจ่ายคืน ดีมาก! 🌈';}
+  else if(diff>0){sc.className='settle-card pp-owes';document.getElementById('settleEmoji').textContent='💜';document.getElementById('settleLabel').textContent='PP ต้องจ่ายคืน JP';document.getElementById('settleAmount').textContent=fmt(diff);document.getElementById('settleDesc').textContent=`JP จ่ายไปแล้ว ${fmt(paidJP)}\nแต่ควรจ่ายแค่ ${fmt(shareJP)}\nPP ค้างอยู่ ${fmt(diff)}`;}
+  else{sc.className='settle-card jp-owes';document.getElementById('settleEmoji').textContent='🌿';document.getElementById('settleLabel').textContent='JP ต้องจ่ายคืน PP';document.getElementById('settleAmount').textContent=fmt(Math.abs(diff));document.getElementById('settleDesc').textContent=`PP จ่ายไปแล้ว ${fmt(paidPP)}\nแต่ควรจ่ายแค่ ${fmt(sharePP)}\nJP ค้างอยู่ ${fmt(Math.abs(diff))}`;}
+  const pending=wishes.filter(w=>!w.bought);
+  const wishTotal=pending.reduce((s,w)=>s+w.price,0);
+  document.getElementById('wishMiniAmt').textContent=fmt(wishTotal);
+  document.getElementById('wishMiniSub').textContent=pending.length?`${pending.length} รายการที่รออยู่ · กด 🛍️ เพื่อดู`:'ไม่มีของรออยู่ 🎉';
+}
+
+function renderList() {
+  const list=document.getElementById('entriesList');
+  document.getElementById('countBadge').textContent=entries.length;
+  if(!entries.length){list.innerHTML=`<div class="empty-state"><div class="big-emoji">🍽️</div><p>ยังไม่มีรายการ<br>ไปเพิ่มรายการแรกกันเลย! 💕</p></div>`;return;}
+  list.innerHTML=entries.map(e=>{
+    const sJP=e.amount*e.splitJP/100,sPP=e.amount*(100-e.splitJP)/100;
+    const splitLabel=e.splitJP===50?'50/50':`JP ${e.splitJP}% · PP ${100-e.splitJP}%`;
+    const payerTag=e.payer==='jp'?`<span class="tag tag-jp">🌿 JP จ่ายก่อน</span>`:`<span class="tag tag-pp">💜 PP จ่ายก่อน</span>`;
+    const diff=(e.payer==='jp'?e.amount:0)-sJP;
+    let oweHtml;
+    if(e.settled){oweHtml=`<span class="entry-owe owe-even tag-settled">✅ จ่ายคืนแล้ว${e.settledDate?' · '+fmtDate(e.settledDate):''}</span>`;}
+    else{oweHtml=Math.abs(diff)<0.01?`<span class="entry-owe owe-even">✅ หารเท่ากัน</span>`:diff>0?`<span class="entry-owe owe-pp">💜 PP ต้องจ่ายคืน ${fmt(sPP)}</span>`:`<span class="entry-owe owe-jp">🌿 JP ต้องจ่ายคืน ${fmt(sJP)}</span>`;}
+    const settleBtn=e.settled
+      ?`<button class="btn-settle done" disabled>✅ จ่ายคืนแล้ว</button>`
+      :(Math.abs(diff)<0.01?'':`<button class="btn-settle" onclick="openSettle(${e.id})">💸 จ่ายคืนแล้ว</button>`);
+    return `<div class="entry-item ${e.payer==='pp'?'pp-paid':''} ${e.settled?'settled':''}">
+      <div class="entry-top"><div><div class="entry-name ${e.settled?'crossed':''}">${e.name}</div><div class="entry-date">${fmtDate(e.date)}</div></div><div class="entry-amount">${fmt(e.amount)}</div></div>
+      <div class="entry-tags">${payerTag}<span class="tag tag-split">✂️ ${splitLabel}</span></div>
+      <div class="entry-share">🌿 JP: ${fmt(sJP)} &nbsp;|&nbsp; 💜 PP: ${fmt(sPP)}</div>
+      ${oweHtml}
+      <div class="entry-actions">${settleBtn}<button class="btn-edit" onclick="openEdit(${e.id})">✏️ แก้ไข</button><button class="btn-del" onclick="deleteEntry(${e.id})">🗑️ ลบ</button></div>
+    </div>`;
+  }).join('');
+}
+
+function renderWish() {
+  const list=document.getElementById('wishList');
+  const pending=wishes.filter(w=>!w.bought);
+  const bought=wishes.filter(w=>w.bought);
+  document.getElementById('wishCountBadge').textContent=pending.length;
+  if(!wishes.length){list.innerHTML=`<div class="empty-state"><div class="big-emoji">🛒</div><p>ยังไม่มีของอยากได้<br>เพิ่มรายการแรกเลย! 🌸</p></div>`;return;}
+  const whoTag=w=>{if(w.who==='jp')return`<span class="tag tag-who-jp">🌿 JP อยากได้</span>`;if(w.who==='pp')return`<span class="tag tag-who-pp">💜 PP อยากได้</span>`;return`<span class="tag tag-who-both">💕 ทั้งคู่อยากได้</span>`;};
+  let html='';
+  if(pending.length){
+    html+=`<div class="wish-section-title">🛍️ รออยู่ (${pending.length})</div>`;
+    html+=pending.map(w=>`
+      <div class="wish-item">
+        <div class="wish-item-top"><div class="wish-item-name">${w.name}</div><div class="wish-price">${w.price>0?fmt(w.price):'ยังไม่ระบุ'}</div></div>
+        <div class="wish-tags">${whoTag(w)}${w.note?`<span class="tag tag-split">📝 ${w.note.length>20?w.note.slice(0,20)+'...':w.note}</span>`:''}</div>
+        <div class="entry-actions">
+          <button class="btn-paid" onclick="openPaidModal(${w.id})">✅ จ่ายแล้ว!</button>
+          <button class="btn-edit" onclick="openEditWish(${w.id})">✏️ แก้ไข</button>
+          <button class="btn-del" onclick="deleteWish(${w.id})">🗑️</button>
+        </div>
+      </div>`).join('');
+  }
+  if(bought.length){
+    html+=`<div class="wish-section-title">✅ ซื้อแล้ว (${bought.length})</div>`;
+    html+=bought.map(w=>`
+      <div class="wish-item bought">
+        <div class="wish-item-top"><div><div class="wish-item-name">${w.name}</div><div class="entry-date">${w.boughtDate?fmtDate(w.boughtDate):''}</div></div><div class="wish-price">${w.boughtAmount?fmt(w.boughtAmount):w.price>0?fmt(w.price):'—'}</div></div>
+        <div class="wish-tags"><span class="tag tag-bought">✅ ซื้อแล้ว</span>${whoTag(w)}</div>
+        <div class="entry-actions"><button class="btn-del" onclick="deleteWish(${w.id})">🗑️ ลบ</button></div>
+      </div>`).join('');
+  }
+  list.innerHTML=html;
+}
+
+// ─── INIT ────────────────────────────────────────────────
+updateSheetTip();
+if(SCRIPT_URL) {
+  setSyncBar('loading','กำลังโหลดจาก Google Sheets...');
+  loadFromSheet();
+} else {
+  setSyncBar('local','ยังไม่ได้เชื่อม Google Sheets');
+  // show setup hint on first visit
+  if(!localStorage.getItem('jppp_setup_seen')) {
+    document.getElementById('setupCard').style.display='block';
+    localStorage.setItem('jppp_setup_seen','1');
+  }
+}
+renderAll();
+</script>
+</body>
+</html>
