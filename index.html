@@ -487,162 +487,100 @@ input[type=file] { display:none; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── STATE ───────────────────────────────────────────────
+const SUPABASE_URL = 'https://aonxararldarrbanztwr.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvbnhhcmFybGRhcnJiYW56dHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NTk2ODksImV4cCI6MjA5NjMzNTY4OX0.ASrKljfkBP1ZBMTkQPRcK3xzOhhrPguWR9wcozGSnS8';
+
+async function sb(method, table, body, query) {
+  query = query || '';
+  const url = SUPABASE_URL + '/rest/v1/' + table + query;
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Content-Type': 'application/json',
+  };
+  if (method === 'POST') headers['Prefer'] = 'resolution=merge-duplicates';
+  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) { const t = await res.text(); throw new Error(t); }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 let entries = JSON.parse(localStorage.getItem('jppp_v2') || '[]');
 let wishes  = JSON.parse(localStorage.getItem('jppp_wish') || '[]');
-// ⬇️ วาง Apps Script URL ของคุณตรงนี้ (แล้ว re-upload ขึ้น GitHub ครั้งเดียว ทุกเครื่องใช้ได้เลย)
-const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbzgzwJX9LYCKBLVLQZzVBqrgbrFDHoKsWMxoBYnErhtohI_ysI0bi613exdZOFqMvEo-g/exec';
-let SCRIPT_URL = HARDCODED_URL.startsWith('https://script.google.com')
-  ? HARDCODED_URL
-  : (localStorage.getItem('jppp_script_url') || '');
 let curSplit = 50, curPayer = 'jp';
-let syncing = false;
 
 document.getElementById('fDate').valueAsDate = new Date();
 
-// ─── UTILS ───────────────────────────────────────────────
 const fmt = n => '฿' + n.toLocaleString('th-TH', {minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate = s => { if(!s) return ''; const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
 const todayStr = () => new Date().toISOString().slice(0,10);
 
-function showToast(msg, dur=2200) {
+function showToast(msg, dur) {
+  dur = dur || 2200;
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), dur);
+  setTimeout(function(){ t.classList.remove('show'); }, dur);
 }
-
 function setSyncBar(state, text) {
   const b=document.getElementById('syncBar'); b.className='sync-bar '+state;
   document.getElementById('syncText').textContent=text;
 }
 
-// ─── SETUP / SCRIPT URL ──────────────────────────────────
-function showSetup() {
-  document.getElementById('setupCard').style.display='block';
-  document.getElementById('scriptUrlInput').value=SCRIPT_URL;
-  document.getElementById('setupCard').scrollIntoView({behavior:'smooth'});
-}
-function saveScriptUrl() {
-  const url=document.getElementById('scriptUrlInput').value.trim();
-  if(!url.includes('script.google.com')) { alert('URL ไม่ถูกต้อง กรุณาใส่ URL จาก Google Apps Script'); return; }
-  SCRIPT_URL=url; localStorage.setItem('jppp_script_url',url);
-  document.getElementById('setupCard').style.display='none';
-  updateSheetTip(); loadFromSheet();
-}
-function skipSetup() { document.getElementById('setupCard').style.display='none'; }
-
-function updateSheetTip() {
-  const tip=document.getElementById('sheetTip');
-  if(SCRIPT_URL) {
-    tip.innerHTML=`<strong>🟢 เชื่อมแล้ว:</strong> ข้อมูลซิงก์กับ Google Sheets อัตโนมัติ<br>
-    <button style="margin-top:6px;padding:5px 12px;border-radius:8px;border:1.5px solid var(--jp-light);background:var(--jp-pale);color:var(--jp);font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="loadFromSheet()">🔄 โหลดข้อมูลใหม่</button>
-    <button style="margin-top:6px;margin-left:6px;padding:5px 12px;border-radius:8px;border:1.5px solid #ffd6d6;background:#fff5f5;color:#e05555;font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="disconnectSheet()">🔌 ยกเลิกการเชื่อม</button>`;
-  } else {
-    tip.innerHTML=`<strong>🔗 Google Sheets:</strong> ยังไม่ได้เชื่อม<br>
-    <button style="margin-top:6px;padding:5px 12px;border-radius:8px;border:1.5px solid var(--jp-light);background:var(--jp-pale);color:var(--jp);font-size:0.78rem;font-weight:700;cursor:pointer;" onclick="showSetup()">⚙️ ตั้งค่าการเชื่อมต่อ</button>`;
-  }
-}
-function disconnectSheet() {
-  if(!confirm('ยกเลิกการเชื่อม Google Sheets ใช่ไหม?\nข้อมูลที่อยู่ใน localStorage จะยังอยู่')) return;
-  SCRIPT_URL=''; localStorage.removeItem('jppp_script_url');
-  setSyncBar('local','ยังไม่ได้เชื่อม Google Sheets'); updateSheetTip();
-}
-
-// ─── GOOGLE SHEETS SYNC (GET-only, CORS-safe) ────────────
-//  Apps Script redirect ทำให้ POST ติด CORS
-//  แก้โดยส่งทุกอย่างเป็น GET + query params แทน
-async function callSheet(params) {
-  if(!SCRIPT_URL) return null;
+async function loadFromSupabase() {
+  setSyncBar('loading','กำลังโหลดจาก Supabase...');
   try {
-    const qs = Object.entries(params)
-      .map(([k,v]) => {
-        const val = (typeof v === 'object') ? encodeURIComponent(JSON.stringify(v)) : encodeURIComponent(String(v));
-        return k + '=' + val;
-      }).join('&');
-    const url = SCRIPT_URL + '?' + qs + '&_t=' + Date.now();
-    const res = await fetch(url, { redirect:'follow' });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    setSyncBar('ok','ซิงก์แล้ว ✅');
-    return data;
-  } catch(err) {
-    console.warn('Sync error:', err);
-    // ไม่ขึ้น error bar ตอน write เพื่อไม่ให้สับสนกับ load error
-    return null;
-  }
-}
-
-async function loadFromSheet() {
-  if(!SCRIPT_URL) return;
-  setSyncBar('loading','กำลังโหลดจาก Google Sheets...');
-  try {
-    const url = SCRIPT_URL + '?action=getAll&_t=' + Date.now();
-    const res = await fetch(url, { redirect:'follow' });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    if(!data.ok && !data.entries) throw new Error(data.error||'no data');
-
-    // ✅ ทับ localStorage เฉพาะตอนที่ Sheet มีข้อมูล
-    // ถ้า Sheet ว่าง แต่ localStorage มีอยู่ → ให้ใช้ localStorage แทน (ป้องกันข้อมูลหาย)
-    if(data.entries && data.entries.length > 0) {
-      entries = data.entries;
-      localStorage.setItem('jppp_v2', JSON.stringify(entries));
-    } else if(data.entries && data.entries.length === 0 && entries.length > 0) {
-      // Sheet ว่าง แต่ local มีข้อมูล → sync local ขึ้น Sheet
-      setSyncBar('loading','Sheet ว่าง กำลัง sync ข้อมูล local ขึ้น...');
-      for(const e of entries) {
-        await callSheet({action:'addEntry', entry:e});
-      }
-    } else if(data.entries) {
-      entries = data.entries;
-      localStorage.setItem('jppp_v2', JSON.stringify(entries));
-    }
-
-    if(data.wishes && data.wishes.length > 0) {
-      wishes = data.wishes;
-      localStorage.setItem('jppp_wish', JSON.stringify(wishes));
-    } else if(data.wishes && data.wishes.length === 0 && wishes.length > 0) {
-      for(const w of wishes) {
-        await callSheet({action:'addWish', wish:w});
-      }
-    } else if(data.wishes) {
-      wishes = data.wishes;
-      localStorage.setItem('jppp_wish', JSON.stringify(wishes));
-    }
-
-    setSyncBar('ok',`ซิงก์แล้ว · ${entries.length} รายการ ✅`);
+    const ents  = await sb('GET','entries',null,'?order=id.desc');
+    const wishs = await sb('GET','wishes',null,'?order=id.desc');
+    entries = ents  || [];
+    wishes  = wishs || [];
+    localStorage.setItem('jppp_v2',   JSON.stringify(entries));
+    localStorage.setItem('jppp_wish', JSON.stringify(wishes));
+    setSyncBar('ok', 'ซิงก์แล้ว · ' + entries.length + ' รายการ ✅');
     renderAll();
-    showToast('🔄 โหลดข้อมูลจาก Google Sheets แล้ว');
   } catch(err) {
     console.warn('Load error:', err);
-    setSyncBar('error','โหลดไม่ได้ — ใช้ข้อมูลเดิมไปก่อน');
+    setSyncBar('error','โหลดไม่ได้ — ใช้ข้อมูลใน localStorage แทน');
+    renderAll();
   }
 }
 
-// ─── TAB ─────────────────────────────────────────────────
+async function forceUploadAll() {
+  if(!entries.length && !wishes.length) { alert('ไม่มีข้อมูลที่จะอัปโหลด'); return; }
+  if(!confirm('อัปโหลดข้อมูลทั้งหมดขึ้น Supabase?\n- รายจ่าย ' + entries.length + ' รายการ\n- ของอยากได้ ' + wishes.length + ' รายการ')) return;
+  setSyncBar('loading','กำลังอัปโหลด...');
+  try {
+    if(entries.length) await sb('POST','entries',entries);
+    if(wishes.length)  await sb('POST','wishes',wishes);
+    setSyncBar('ok','☁️ อัปโหลดสำเร็จ ✅');
+    showToast('✅ อัปโหลดสำเร็จ! ' + entries.length + ' รายจ่าย + ' + wishes.length + ' ของอยากได้');
+  } catch(err) {
+    setSyncBar('error','อัปโหลดไม่สำเร็จ: ' + err.message);
+    console.error(err);
+  }
+}
+
 function switchTab(t) {
-  ['dash','add','list','wish'].forEach(id => {
+  ['dash','add','list','wish'].forEach(function(id) {
     document.getElementById('tab-'+id).classList.toggle('active',id===t);
-    const btn=document.getElementById('nav-'+id);
+    var btn=document.getElementById('nav-'+id);
     btn.classList.toggle('active',id===t);
-    btn.classList.toggle('wish-nav',id===t&&t==='wish');
+    btn.classList.toggle('wish-nav',id===t && t==='wish');
   });
   renderAll();
 }
 
-// ─── FORM CONTROLS ───────────────────────────────────────
 function setChip(val,btn) {
   curSplit=val; document.getElementById('fSplit').value=val;
-  document.querySelectorAll('.chip').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.chip').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active'); updateSplitBar();
 }
 function onCustomSplit(v) {
   curSplit=Math.min(100,Math.max(0,parseFloat(v)||0));
-  document.querySelectorAll('.chip').forEach(b=>b.classList.remove('active')); updateSplitBar();
+  document.querySelectorAll('.chip').forEach(function(b){b.classList.remove('active');}); updateSplitBar();
 }
 function updateSplitBar() {
   document.getElementById('splitBarFill').style.width=curSplit+'%';
-  document.getElementById('splitLblJP').textContent=`JP ${curSplit}%`;
-  document.getElementById('splitLblPP').textContent=`PP ${100-curSplit}%`;
+  document.getElementById('splitLblJP').textContent='JP '+curSplit+'%';
+  document.getElementById('splitLblPP').textContent='PP '+(100-curSplit)+'%';
 }
 function setPayer(p) {
   curPayer=p;
@@ -650,35 +588,31 @@ function setPayer(p) {
   document.getElementById('payPP').classList.toggle('active',p==='pp');
 }
 
-// ─── ADD ENTRY ───────────────────────────────────────────
 async function addEntry() {
-  const name=document.getElementById('fName').value.trim();
-  const amount=parseFloat(document.getElementById('fAmount').value);
-  const date=document.getElementById('fDate').value;
+  var name=document.getElementById('fName').value.trim();
+  var amount=parseFloat(document.getElementById('fAmount').value);
+  var date=document.getElementById('fDate').value;
   if(!name){alert('กรุณาใส่ชื่อร้าน 🙏');return;}
   if(!amount||amount<=0){alert('กรุณาใส่ราคา 🙏');return;}
-  const entry={id:Date.now(),name,amount,date,splitJP:curSplit,payer:curPayer,settled:false,settledDate:'',settledNote:''};
-  entries.unshift(entry);
-  save(); renderAll();
+  var entry={id:Date.now(),name:name,amount:amount,date:date,splitJP:curSplit,payer:curPayer,settled:false,settledDate:'',settledNote:'',fromWish:false,createdAt:new Date().toISOString()};
+  entries.unshift(entry); save(); renderAll();
   document.getElementById('fName').value='';
   document.getElementById('fAmount').value='';
   document.getElementById('fDate').valueAsDate=new Date();
   switchTab('list');
   showToast('✅ เพิ่มรายการแล้ว');
-  // sync to sheet
-  const res = await callSheet({action:'addEntry', entry});
-  if(res&&res.id) { entry.sheetRowId=res.id; save(); }
+  try { setSyncBar('loading','กำลังซิงก์...'); await sb('POST','entries',[entry]); setSyncBar('ok','ซิงก์แล้ว ✅'); }
+  catch(e) { setSyncBar('error','บันทึก local แล้ว sync ทีหลัง'); }
 }
 
-// ─── SETTLE (จ่ายคืนแล้ว) ────────────────────────────────
 function openSettle(id) {
-  const e=entries.find(x=>x.id===id); if(!e) return;
-  const sJP=e.amount*e.splitJP/100, sPP=e.amount*(100-e.splitJP)/100;
-  const diff=(e.payer==='jp'?e.amount:0)-sJP;
-  let msg='';
+  var e=entries.find(function(x){return x.id===id;}); if(!e) return;
+  var sJP=e.amount*e.splitJP/100, sPP=e.amount*(100-e.splitJP)/100;
+  var diff=(e.payer==='jp'?e.amount:0)-sJP;
+  var msg='';
   if(Math.abs(diff)<0.01) msg='รายการนี้หารเท่ากันอยู่แล้ว';
-  else if(diff>0) msg=`PP ต้องจ่ายคืน JP ${fmt(sPP)}\nกดยืนยันเมื่อจ่ายคืนแล้ว`;
-  else msg=`JP ต้องจ่ายคืน PP ${fmt(sJP)}\nกดยืนยันเมื่อจ่ายคืนแล้ว`;
+  else if(diff>0) msg='PP ต้องจ่ายคืน JP ' + fmt(sPP) + '\nกดยืนยันเมื่อจ่ายคืนแล้ว';
+  else msg='JP ต้องจ่ายคืน PP ' + fmt(sJP) + '\nกดยืนยันเมื่อจ่ายคืนแล้ว';
   document.getElementById('settleId').value=id;
   document.getElementById('settleConfirmText').textContent=msg;
   document.getElementById('settleDate').value=todayStr();
@@ -686,33 +620,31 @@ function openSettle(id) {
   document.getElementById('settleModal').classList.add('open');
 }
 async function confirmSettle() {
-  const id=parseInt(document.getElementById('settleId').value);
-  const idx=entries.findIndex(x=>x.id===id); if(idx===-1) return;
-  entries[idx].settled=true;
-  entries[idx].settledDate=document.getElementById('settleDate').value;
-  entries[idx].settledNote=document.getElementById('settleNote').value;
+  var id=parseInt(document.getElementById('settleId').value);
+  var idx=entries.findIndex(function(x){return x.id===id;}); if(idx===-1) return;
+  var settledDate=document.getElementById('settleDate').value;
+  var settledNote=document.getElementById('settleNote').value;
+  entries[idx]=Object.assign({},entries[idx],{settled:true,settledDate:settledDate,settledNote:settledNote});
   save(); renderAll(); closeModal('settleModal');
   showToast('💸 บันทึกการจ่ายคืนแล้ว!');
-  await callSheet({action:'settleEntry', id, settledDate:entries[idx].settledDate, settledNote:entries[idx].settledNote});
+  try { await sb('PATCH','entries',{settled:true,settledDate:settledDate,settledNote:settledNote},'?id=eq.'+id); } catch(e) { console.warn(e); }
 }
 
-// ─── DELETE / CLEAR ──────────────────────────────────────
 async function deleteEntry(id) {
   if(!confirm('ลบรายการนี้ใช่ไหม?')) return;
-  entries=entries.filter(e=>e.id!==id); save(); renderAll();
+  entries=entries.filter(function(e){return e.id!==id;}); save(); renderAll();
   showToast('🗑️ ลบแล้ว');
-  await callSheet({action:'deleteEntry',id});
+  try { await sb('DELETE','entries',null,'?id=eq.'+id); } catch(e) { console.warn(e); }
 }
 async function clearAll() {
   if(!entries.length) return;
   if(!confirm('ล้างรายการทั้งหมดเลยนะ? 🥺')) return;
   entries=[]; save(); renderAll();
-  await callSheet({action:'clearEntries'});
+  try { await sb('DELETE','entries',null,'?id=gt.0'); } catch(e) { console.warn(e); }
 }
 
-// ─── EDIT ENTRY ──────────────────────────────────────────
 function openEdit(id) {
-  const e=entries.find(x=>x.id===id); if(!e) return;
+  var e=entries.find(function(x){return x.id===id;}); if(!e) return;
   document.getElementById('editId').value=e.id;
   document.getElementById('editName').value=e.name;
   document.getElementById('editAmount').value=e.amount;
@@ -722,45 +654,50 @@ function openEdit(id) {
   document.getElementById('editModal').classList.add('open');
 }
 async function saveEdit() {
-  const id=parseInt(document.getElementById('editId').value);
-  const idx=entries.findIndex(x=>x.id===id); if(idx===-1) return;
-  const updated={...entries[idx], name:document.getElementById('editName').value.trim(), amount:parseFloat(document.getElementById('editAmount').value)||0, date:document.getElementById('editDate').value, splitJP:parseFloat(document.getElementById('editSplit').value)||0, payer:document.getElementById('editPayer').value};
+  var id=parseInt(document.getElementById('editId').value);
+  var idx=entries.findIndex(function(x){return x.id===id;}); if(idx===-1) return;
+  var updated=Object.assign({},entries[idx],{
+    name:document.getElementById('editName').value.trim(),
+    amount:parseFloat(document.getElementById('editAmount').value)||0,
+    date:document.getElementById('editDate').value,
+    splitJP:parseFloat(document.getElementById('editSplit').value)||0,
+    payer:document.getElementById('editPayer').value
+  });
   entries[idx]=updated; save(); renderAll(); closeModal('editModal');
   showToast('✏️ แก้ไขแล้ว');
-  await callSheet({action:'updateEntry',entry:updated});
+  try { await sb('PATCH','entries',updated,'?id=eq.'+id); } catch(e) { console.warn(e); }
 }
 
-// ─── WISHLIST ────────────────────────────────────────────
 async function addWish() {
-  const name=document.getElementById('wName').value.trim();
-  const price=parseFloat(document.getElementById('wPrice').value)||0;
-  const who=document.getElementById('wWho').value;
-  const note=document.getElementById('wNote').value.trim();
+  var name=document.getElementById('wName').value.trim();
+  var price=parseFloat(document.getElementById('wPrice').value)||0;
+  var who=document.getElementById('wWho').value;
+  var note=document.getElementById('wNote').value.trim();
   if(!name){alert('กรุณาใส่ชื่อสินค้า 🙏');return;}
-  const wish={id:Date.now(),name,price,who,note,bought:false};
+  var wish={id:Date.now(),name:name,price:price,who:who,note:note,bought:false,boughtDate:'',boughtAmount:0,createdAt:new Date().toISOString()};
   wishes.unshift(wish); saveWishes(); renderAll();
   document.getElementById('wName').value='';
   document.getElementById('wPrice').value='';
   document.getElementById('wNote').value='';
   switchTab('wish');
   showToast('🛍️ เพิ่มของอยากได้แล้ว');
-  const res=await callSheet({action:'addWish',wish});
-  if(res&&res.id){wish.sheetRowId=res.id; saveWishes();}
+  try { setSyncBar('loading','กำลังซิงก์...'); await sb('POST','wishes',[wish]); setSyncBar('ok','ซิงก์แล้ว ✅'); }
+  catch(e) { setSyncBar('error','บันทึก local แล้ว sync ทีหลัง'); }
 }
 async function deleteWish(id) {
   if(!confirm('ลบรายการนี้ใช่ไหม?')) return;
-  wishes=wishes.filter(w=>w.id!==id); saveWishes(); renderAll();
+  wishes=wishes.filter(function(w){return w.id!==id;}); saveWishes(); renderAll();
   showToast('🗑️ ลบแล้ว');
-  await callSheet({action:'deleteWish',id});
+  try { await sb('DELETE','wishes',null,'?id=eq.'+id); } catch(e) { console.warn(e); }
 }
 async function clearWishes() {
   if(!wishes.length) return;
   if(!confirm('ล้างรายการของอยากได้ทั้งหมด? 🥺')) return;
   wishes=[]; saveWishes(); renderAll();
-  await callSheet({action:'clearWishes'});
+  try { await sb('DELETE','wishes',null,'?id=gt.0'); } catch(e) { console.warn(e); }
 }
 function openEditWish(id) {
-  const w=wishes.find(x=>x.id===id); if(!w) return;
+  var w=wishes.find(function(x){return x.id===id;}); if(!w) return;
   document.getElementById('ewId').value=w.id;
   document.getElementById('ewName').value=w.name;
   document.getElementById('ewPrice').value=w.price;
@@ -769,226 +706,169 @@ function openEditWish(id) {
   document.getElementById('editWishModal').classList.add('open');
 }
 async function saveWishEdit() {
-  const id=parseInt(document.getElementById('ewId').value);
-  const idx=wishes.findIndex(x=>x.id===id); if(idx===-1) return;
-  const updated={...wishes[idx],name:document.getElementById('ewName').value.trim(),price:parseFloat(document.getElementById('ewPrice').value)||0,who:document.getElementById('ewWho').value,note:document.getElementById('ewNote').value.trim()};
+  var id=parseInt(document.getElementById('ewId').value);
+  var idx=wishes.findIndex(function(x){return x.id===id;}); if(idx===-1) return;
+  var updated=Object.assign({},wishes[idx],{
+    name:document.getElementById('ewName').value.trim(),
+    price:parseFloat(document.getElementById('ewPrice').value)||0,
+    who:document.getElementById('ewWho').value,
+    note:document.getElementById('ewNote').value.trim()
+  });
   wishes[idx]=updated; saveWishes(); renderAll(); closeModal('editWishModal');
   showToast('✏️ แก้ไขแล้ว');
-  await callSheet({action:'updateWish',wish:updated});
+  try { await sb('PATCH','wishes',updated,'?id=eq.'+id); } catch(e) { console.warn(e); }
 }
 function openPaidModal(id) {
-  const w=wishes.find(x=>x.id===id); if(!w) return;
+  var w=wishes.find(function(x){return x.id===id;}); if(!w) return;
   document.getElementById('paidWishId').value=id;
   document.getElementById('paidAmount').value=w.price||'';
   document.getElementById('paidDate').valueAsDate=new Date();
   document.getElementById('paidSplit').value=50;
   document.getElementById('paidSplitPP').textContent=50;
   document.getElementById('paidPayer').value='jp';
-  document.getElementById('paidConfirmText').textContent=`"${w.name}" จ่ายไปแล้ว!\nต้องการเพิ่มเป็นรายการค่าใช้จ่ายด้วยไหม?`;
+  document.getElementById('paidConfirmText').textContent='"' + w.name + '" จ่ายไปแล้ว!\nต้องการเพิ่มเป็นรายการค่าใช้จ่ายด้วยไหม?';
   document.getElementById('paidModal').classList.add('open');
 }
 async function confirmPaid() {
-  const id=parseInt(document.getElementById('paidWishId').value);
-  const w=wishes.find(x=>x.id===id); if(!w) return;
-  const amount=parseFloat(document.getElementById('paidAmount').value);
+  var id=parseInt(document.getElementById('paidWishId').value);
+  var w=wishes.find(function(x){return x.id===id;}); if(!w) return;
+  var amount=parseFloat(document.getElementById('paidAmount').value);
   if(!amount||amount<=0){alert('กรุณาใส่ราคา 🙏');return;}
-  const date=document.getElementById('paidDate').value;
-  const payer=document.getElementById('paidPayer').value;
-  const splitJP=parseFloat(document.getElementById('paidSplit').value)||50;
-  const entry={id:Date.now(),name:w.name,amount,date,splitJP,payer,settled:false,settledDate:'',settledNote:'',fromWish:true};
+  var date=document.getElementById('paidDate').value;
+  var payer=document.getElementById('paidPayer').value;
+  var splitJP=parseFloat(document.getElementById('paidSplit').value)||50;
+  var entry={id:Date.now(),name:w.name,amount:amount,date:date,splitJP:splitJP,payer:payer,settled:false,settledDate:'',settledNote:'',fromWish:true,createdAt:new Date().toISOString()};
   entries.unshift(entry);
-  const idx=wishes.findIndex(x=>x.id===id);
-  wishes[idx]={...wishes[idx],bought:true,boughtDate:date,boughtAmount:amount};
+  var idx=wishes.findIndex(function(x){return x.id===id;});
+  wishes[idx]=Object.assign({},wishes[idx],{bought:true,boughtDate:date,boughtAmount:amount});
   save(); saveWishes(); renderAll(); closeModal('paidModal');
-  showToast(`🎉 "${w.name}" ย้ายเป็นรายจ่ายแล้ว!`);
-  await callSheet({action:'addEntry',entry});
-  await callSheet({action:'markWishBought',id,boughtDate:date,boughtAmount:amount});
+  showToast('🎉 "' + w.name + '" ย้ายเป็นรายจ่ายแล้ว!');
+  try {
+    await sb('POST','entries',[entry]);
+    await sb('PATCH','wishes',{bought:true,boughtDate:date,boughtAmount:amount},'?id=eq.'+id);
+  } catch(e) { console.warn(e); }
 }
 
-function closeModal(id){document.getElementById(id).classList.remove('open');}
-function save(){localStorage.setItem('jppp_v2',JSON.stringify(entries));}
-function saveWishes(){localStorage.setItem('jppp_wish',JSON.stringify(wishes));}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function save(){ localStorage.setItem('jppp_v2',JSON.stringify(entries)); }
+function saveWishes(){ localStorage.setItem('jppp_wish',JSON.stringify(wishes)); }
 
-// ─── EXPORT / IMPORT ─────────────────────────────────────
 function exportCSV() {
   if(!entries.length){alert('ยังไม่มีข้อมูล 🌿');return;}
-  const rows=[['วันที่','ร้าน/รายการ','ราคารวม','JP จ่าย%','PP จ่าย%','ใครจ่ายก่อน','JP ควรจ่าย','PP ควรจ่าย','JP ต้องจ่ายคืน','PP ต้องจ่ายคืน','สถานะ']];
-  entries.forEach(e=>{
-    const sJP=e.amount*e.splitJP/100,sPP=e.amount*(100-e.splitJP)/100;
-    const paidJP=e.payer==='jp'?e.amount:0,diff=paidJP-sJP;
-    rows.push([fmtDate(e.date),e.name,e.amount.toFixed(2),e.splitJP,100-e.splitJP,e.payer==='jp'?'JP':'PP',sJP.toFixed(2),sPP.toFixed(2),diff<0?Math.abs(diff).toFixed(2):'0.00',diff>0?diff.toFixed(2):'0.00',e.settled?'จ่ายคืนแล้ว':'ค้างอยู่']);
+  var rows=[['วันที่','ร้าน/รายการ','ราคารวม','JP จ่าย%','PP จ่าย%','ใครจ่ายก่อน','JP ควรจ่าย','PP ควรจ่าย','สถานะ']];
+  entries.forEach(function(e){
+    var sJP=e.amount*e.splitJP/100,sPP=e.amount*(100-e.splitJP)/100;
+    rows.push([fmtDate(e.date),e.name,e.amount.toFixed(2),e.splitJP,100-e.splitJP,e.payer==='jp'?'JP':'PP',sJP.toFixed(2),sPP.toFixed(2),e.settled?'จ่ายคืนแล้ว':'ค้างอยู่']);
   });
-  const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='JPPP_'+new Date().toLocaleDateString('th-TH').replace(/\//g,'-')+'.csv';a.click();
+  var csv='\uFEFF'+rows.map(function(r){return r.map(function(v){return '"'+v+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='JPPP_'+new Date().toLocaleDateString('th-TH').replace(/[/]/g,'-')+'.csv';a.click();
 }
 function exportJSON() {
-  if(!entries.length&&!wishes.length){alert('ยังไม่มีข้อมูล 🌿');return;}
-  const data=JSON.stringify({exported:new Date().toISOString(),entries,wishes},null,2);
-  const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
-  a.download='JPPP_backup_'+new Date().toLocaleDateString('th-TH').replace(/\//g,'-')+'.json';a.click();
+  var data=JSON.stringify({exported:new Date().toISOString(),entries:entries,wishes:wishes},null,2);
+  var a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  a.download='JPPP_backup_'+new Date().toLocaleDateString('th-TH').replace(/[/]/g,'-')+'.json';a.click();
 }
 function importJSON(input) {
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
     try{
-      const data=JSON.parse(e.target.result);
-      const imp=data.entries||data;
+      var data=JSON.parse(e.target.result);
+      var imp=data.entries||data;
       if(!Array.isArray(imp))throw new Error('invalid');
-      if(confirm(`พบ ${imp.length} รายการ\nทับข้อมูลเดิมไหม?\n(Cancel = เพิ่มต่อ)`)){entries=imp;if(data.wishes)wishes=data.wishes;}
-      else{entries=[...entries,...imp];if(data.wishes)wishes=[...wishes,...data.wishes];}
-      save();saveWishes();renderAll();showToast('✅ Import สำเร็จ!');
-    }catch{alert('ไฟล์ไม่ถูกต้อง 😢');}
+      if(confirm('พบ '+imp.length+' รายการ\nทับข้อมูลเดิมไหม?\n(Cancel = เพิ่มต่อ)')){entries=imp;if(data.wishes)wishes=data.wishes;}
+      else{entries=entries.concat(imp);if(data.wishes)wishes=wishes.concat(data.wishes);}
+      save();saveWishes();forceUploadAll();renderAll();
+    }catch(err){alert('ไฟล์ไม่ถูกต้อง 😢');}
   };
   reader.readAsText(file);input.value='';
 }
-async function forceUploadAll() {
-  if(!SCRIPT_URL) { alert('ยังไม่ได้เชื่อม Google Sheets 🙏'); return; }
-  if(!entries.length && !wishes.length) { alert('ไม่มีข้อมูลที่จะอัปโหลด'); return; }
-  if(!confirm(`อัปโหลดข้อมูลทั้งหมดขึ้น Google Sheets?\n- รายจ่าย ${entries.length} รายการ\n- ของอยากได้ ${wishes.length} รายการ\n\n⚠️ จะล้าง Sheet แล้ว upload ใหม่ทั้งหมด`)) return;
-
-  setSyncBar('loading', 'กำลังอัปโหลด...');
-  try {
-    // ล้าง Sheet ก่อน
-    await callSheet({action:'clearEntries'});
-    await callSheet({action:'clearWishes'});
-    // upload ทีละรายการ
-    for(let i=0; i<entries.length; i++) {
-      setSyncBar('loading', `อัปโหลดรายจ่าย ${i+1}/${entries.length}...`);
-      await callSheet({action:'addEntry', entry:entries[i]});
-    }
-    for(let i=0; i<wishes.length; i++) {
-      setSyncBar('loading', `อัปโหลดของอยากได้ ${i+1}/${wishes.length}...`);
-      await callSheet({action:'addWish', wish:wishes[i]});
-    }
-    setSyncBar('ok', `☁️ อัปโหลดสำเร็จ ${entries.length} รายการ ✅`);
-    showToast(`✅ อัปโหลดสำเร็จ! ${entries.length} รายจ่าย + ${wishes.length} ของอยากได้`);
-  } catch(err) {
-    setSyncBar('error', 'อัปโหลดไม่สำเร็จ ลองใหม่');
-    console.error(err);
-  }
-}
-
 function copyShareText() {
-  let paidJP=0,paidPP=0,shareJP=0,sharePP=0;
-  entries.forEach(e=>{if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
-  const total=paidJP+paidPP,diff=paidJP-shareJP;
-  const settle=diff>0.01?`PP ต้องจ่ายคืน JP: ${fmt(diff)}`:diff<-0.01?`JP ต้องจ่ายคืน PP: ${fmt(Math.abs(diff))}`:'✅ เท่ากันพอดี!';
-  const pending=wishes.filter(w=>!w.bought);
-  const wishText=pending.length?`\n🛍️ ของอยากได้อีก ${pending.length} รายการ`:'';
-  const text=`🌿💜 JPPP App สรุปค่าใช้จ่าย\n━━━━━━━━━━━━━━\n💰 รวมทั้งหมด: ${fmt(total)}\n🌿 JP จ่าย: ${fmt(paidJP)} | ควรจ่าย: ${fmt(shareJP)}\n💜 PP จ่าย: ${fmt(paidPP)} | ควรจ่าย: ${fmt(sharePP)}\n━━━━━━━━━━━━━━\n${settle}${wishText}\n(${entries.length} รายการ)`;
-  navigator.clipboard.writeText(text).then(()=>showToast('✅ Copy แล้ว! 💕')).catch(()=>alert(text));
+  var paidJP=0,paidPP=0,shareJP=0,sharePP=0;
+  entries.forEach(function(e){if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
+  var total=paidJP+paidPP,diff=paidJP-shareJP;
+  var settle=diff>0.01?'PP ต้องจ่ายคืน JP: '+fmt(diff):diff<-0.01?'JP ต้องจ่ายคืน PP: '+fmt(Math.abs(diff)):'✅ เท่ากันพอดี!';
+  var pending=wishes.filter(function(w){return !w.bought;});
+  var text='🌿💜 JPPP App สรุปค่าใช้จ่าย\n━━━━━━━━━━━━━━\n💰 รวมทั้งหมด: '+fmt(total)+'\n🌿 JP จ่าย: '+fmt(paidJP)+' | ควรจ่าย: '+fmt(shareJP)+'\n💜 PP จ่าย: '+fmt(paidPP)+' | ควรจ่าย: '+fmt(sharePP)+'\n━━━━━━━━━━━━━━\n'+settle+(pending.length?'\n🛍️ ของอยากได้อีก '+pending.length+' รายการ':'')+'\n('+entries.length+' รายการ)';
+  navigator.clipboard.writeText(text).then(function(){showToast('✅ Copy แล้ว! 💕');}).catch(function(){alert(text);});
 }
 
-// ─── RENDER ──────────────────────────────────────────────
-function renderAll(){renderDash();renderList();renderWish();}
+function renderAll(){ renderDash(); renderList(); renderWish(); }
 
 function renderDash() {
-  let paidJP=0,paidPP=0,shareJP=0,sharePP=0;
-  const activeEntries=entries.filter(e=>!e.settled);
-  entries.forEach(e=>{if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
-  const total=paidJP+paidPP;
+  var paidJP=0,paidPP=0,shareJP=0,sharePP=0;
+  var active=entries.filter(function(e){return !e.settled;});
+  entries.forEach(function(e){if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
+  var total=paidJP+paidPP;
   document.getElementById('heroTotal').textContent=fmt(total);
-  document.getElementById('heroSub').textContent=entries.length?`${entries.length} รายการ · JP ${fmt(paidJP)} · PP ${fmt(paidPP)}`:'ยังไม่มีรายการ เพิ่มเลย! 🌿';
+  document.getElementById('heroSub').textContent=entries.length?entries.length+' รายการ · JP '+fmt(paidJP)+' · PP '+fmt(paidPP):'ยังไม่มีรายการ เพิ่มเลย! 🌿';
   document.getElementById('statPaidJP').textContent=fmt(paidJP);
   document.getElementById('statPaidPP').textContent=fmt(paidPP);
   document.getElementById('statShareJP').textContent=fmt(shareJP);
   document.getElementById('statSharePP').textContent=fmt(sharePP);
-  const diffJP=paidJP-shareJP;
-  // only show unsettled diff
-  let unsettledDiffJP=0;
-  activeEntries.forEach(e=>{const pj=e.payer==='jp'?e.amount:0;unsettledDiffJP+=pj-e.amount*e.splitJP/100;});
-  document.getElementById('statOwedJP').textContent=unsettledDiffJP>0.01?`PP ยังค้าง ${fmt(unsettledDiffJP)}`:unsettledDiffJP<-0.01?`JP ยังค้าง ${fmt(Math.abs(unsettledDiffJP))}`:'เท่ากัน ✅';
-  document.getElementById('statOwedPP').textContent=unsettledDiffJP<-0.01?`PP ยังค้าง ${fmt(Math.abs(unsettledDiffJP))}`:unsettledDiffJP>0.01?`PP ยังค้าง ${fmt(unsettledDiffJP)}`:'เท่ากัน ✅';
-  const pctJP=total>0?Math.round(shareJP/total*100):50;
+  var uDiff=0;
+  active.forEach(function(e){var pj=e.payer==='jp'?e.amount:0;uDiff+=pj-e.amount*e.splitJP/100;});
+  document.getElementById('statOwedJP').textContent=uDiff>0.01?'PP ยังค้าง '+fmt(uDiff):uDiff<-0.01?'JP ยังค้าง '+fmt(Math.abs(uDiff)):'เท่ากัน ✅';
+  document.getElementById('statOwedPP').textContent=uDiff<-0.01?'PP ยังค้าง '+fmt(Math.abs(uDiff)):uDiff>0.01?'PP ยังค้าง '+fmt(uDiff):'เท่ากัน ✅';
+  var pctJP=total>0?Math.round(shareJP/total*100):50;
   document.getElementById('bigBarJP').style.width=pctJP+'%';
-  document.getElementById('bigBarJP').textContent=pctJP>18?`JP ${pctJP}%`:'';
+  document.getElementById('bigBarJP').textContent=pctJP>18?'JP '+pctJP+'%':'';
   document.getElementById('pctJP').textContent=pctJP+'%';
   document.getElementById('pctPP').textContent=(100-pctJP)+'%';
-  const diff=paidJP-shareJP,sc=document.getElementById('settleCard');
+  var diff=paidJP-shareJP, sc=document.getElementById('settleCard');
   if(!entries.length){sc.className='settle-card';document.getElementById('settleEmoji').textContent='🌿';document.getElementById('settleLabel').textContent='ยังไม่มีข้อมูล';document.getElementById('settleAmount').textContent='฿0';document.getElementById('settleDesc').textContent='เพิ่มรายการเพื่อดูว่าใครต้องจ่ายคืน';}
   else if(Math.abs(diff)<0.01){sc.className='settle-card even';document.getElementById('settleEmoji').textContent='🎉';document.getElementById('settleLabel').textContent='เท่ากันพอดีเลย!';document.getElementById('settleAmount').textContent='฿0';document.getElementById('settleDesc').textContent='ไม่มีใครต้องจ่ายคืน ดีมาก! 🌈';}
-  else if(diff>0){sc.className='settle-card pp-owes';document.getElementById('settleEmoji').textContent='💜';document.getElementById('settleLabel').textContent='PP ต้องจ่ายคืน JP';document.getElementById('settleAmount').textContent=fmt(diff);document.getElementById('settleDesc').textContent=`JP จ่ายไปแล้ว ${fmt(paidJP)}\nแต่ควรจ่ายแค่ ${fmt(shareJP)}\nPP ค้างอยู่ ${fmt(diff)}`;}
-  else{sc.className='settle-card jp-owes';document.getElementById('settleEmoji').textContent='🌿';document.getElementById('settleLabel').textContent='JP ต้องจ่ายคืน PP';document.getElementById('settleAmount').textContent=fmt(Math.abs(diff));document.getElementById('settleDesc').textContent=`PP จ่ายไปแล้ว ${fmt(paidPP)}\nแต่ควรจ่ายแค่ ${fmt(sharePP)}\nJP ค้างอยู่ ${fmt(Math.abs(diff))}`;}
-  const pending=wishes.filter(w=>!w.bought);
-  const wishTotal=pending.reduce((s,w)=>s+w.price,0);
-  document.getElementById('wishMiniAmt').textContent=fmt(wishTotal);
-  document.getElementById('wishMiniSub').textContent=pending.length?`${pending.length} รายการที่รออยู่ · กด 🛍️ เพื่อดู`:'ไม่มีของรออยู่ 🎉';
+  else if(diff>0){sc.className='settle-card pp-owes';document.getElementById('settleEmoji').textContent='💜';document.getElementById('settleLabel').textContent='PP ต้องจ่ายคืน JP';document.getElementById('settleAmount').textContent=fmt(diff);document.getElementById('settleDesc').textContent='JP จ่ายไปแล้ว '+fmt(paidJP)+'\nแต่ควรจ่ายแค่ '+fmt(shareJP)+'\nPP ค้างอยู่ '+fmt(diff);}
+  else{sc.className='settle-card jp-owes';document.getElementById('settleEmoji').textContent='🌿';document.getElementById('settleLabel').textContent='JP ต้องจ่ายคืน PP';document.getElementById('settleAmount').textContent=fmt(Math.abs(diff));document.getElementById('settleDesc').textContent='PP จ่ายไปแล้ว '+fmt(paidPP)+'\nแต่ควรจ่ายแค่ '+fmt(sharePP)+'\nJP ค้างอยู่ '+fmt(Math.abs(diff));}
+  var pending=wishes.filter(function(w){return !w.bought;});
+  document.getElementById('wishMiniAmt').textContent=fmt(pending.reduce(function(s,w){return s+w.price;},0));
+  document.getElementById('wishMiniSub').textContent=pending.length?pending.length+' รายการที่รออยู่':'ไม่มีของรออยู่ 🎉';
 }
 
 function renderList() {
-  const list=document.getElementById('entriesList');
+  var list=document.getElementById('entriesList');
   document.getElementById('countBadge').textContent=entries.length;
-  if(!entries.length){list.innerHTML=`<div class="empty-state"><div class="big-emoji">🍽️</div><p>ยังไม่มีรายการ<br>ไปเพิ่มรายการแรกกันเลย! 💕</p></div>`;return;}
-  list.innerHTML=entries.map(e=>{
-    const sJP=e.amount*e.splitJP/100,sPP=e.amount*(100-e.splitJP)/100;
-    const splitLabel=e.splitJP===50?'50/50':`JP ${e.splitJP}% · PP ${100-e.splitJP}%`;
-    const payerTag=e.payer==='jp'?`<span class="tag tag-jp">🌿 JP จ่ายก่อน</span>`:`<span class="tag tag-pp">💜 PP จ่ายก่อน</span>`;
-    const diff=(e.payer==='jp'?e.amount:0)-sJP;
-    let oweHtml;
-    if(e.settled){oweHtml=`<span class="entry-owe owe-even tag-settled">✅ จ่ายคืนแล้ว${e.settledDate?' · '+fmtDate(e.settledDate):''}</span>`;}
-    else{oweHtml=Math.abs(diff)<0.01?`<span class="entry-owe owe-even">✅ หารเท่ากัน</span>`:diff>0?`<span class="entry-owe owe-pp">💜 PP ต้องจ่ายคืน ${fmt(sPP)}</span>`:`<span class="entry-owe owe-jp">🌿 JP ต้องจ่ายคืน ${fmt(sJP)}</span>`;}
-    const settleBtn=e.settled
-      ?`<button class="btn-settle done" disabled>✅ จ่ายคืนแล้ว</button>`
-      :(Math.abs(diff)<0.01?'':`<button class="btn-settle" onclick="openSettle(${e.id})">💸 จ่ายคืนแล้ว</button>`);
-    return `<div class="entry-item ${e.payer==='pp'?'pp-paid':''} ${e.settled?'settled':''}">
-      <div class="entry-top"><div><div class="entry-name ${e.settled?'crossed':''}">${e.name}</div><div class="entry-date">${fmtDate(e.date)}</div></div><div class="entry-amount">${fmt(e.amount)}</div></div>
-      <div class="entry-tags">${payerTag}<span class="tag tag-split">✂️ ${splitLabel}</span></div>
-      <div class="entry-share">🌿 JP: ${fmt(sJP)} &nbsp;|&nbsp; 💜 PP: ${fmt(sPP)}</div>
-      ${oweHtml}
-      <div class="entry-actions">${settleBtn}<button class="btn-edit" onclick="openEdit(${e.id})">✏️ แก้ไข</button><button class="btn-del" onclick="deleteEntry(${e.id})">🗑️ ลบ</button></div>
-    </div>`;
+  if(!entries.length){list.innerHTML='<div class="empty-state"><div class="big-emoji">🍽️</div><p>ยังไม่มีรายการ<br>ไปเพิ่มรายการแรกกันเลย! 💕</p></div>';return;}
+  list.innerHTML=entries.map(function(e){
+    var sJP=e.amount*e.splitJP/100, sPP=e.amount*(100-e.splitJP)/100;
+    var splitLabel=e.splitJP===50?'50/50':'JP '+e.splitJP+'% · PP '+(100-e.splitJP)+'%';
+    var payerTag=e.payer==='jp'?'<span class="tag tag-jp">🌿 JP จ่ายก่อน</span>':'<span class="tag tag-pp">💜 PP จ่ายก่อน</span>';
+    var diff=(e.payer==='jp'?e.amount:0)-sJP;
+    var oweHtml=e.settled?'<span class="entry-owe owe-even tag-settled">✅ จ่ายคืนแล้ว'+(e.settledDate?' · '+fmtDate(e.settledDate):'')+' </span>':Math.abs(diff)<0.01?'<span class="entry-owe owe-even">✅ หารเท่ากัน</span>':diff>0?'<span class="entry-owe owe-pp">💜 PP ต้องจ่ายคืน '+fmt(sPP)+'</span>':'<span class="entry-owe owe-jp">🌿 JP ต้องจ่ายคืน '+fmt(sJP)+'</span>';
+    var settleBtn=e.settled?'<button class="btn-settle done" disabled>✅ จ่ายคืนแล้ว</button>':(Math.abs(diff)<0.01?'':'<button class="btn-settle" onclick="openSettle('+e.id+')">💸 จ่ายคืนแล้ว</button>');
+    return '<div class="entry-item '+(e.payer==='pp'?'pp-paid':'')+' '+(e.settled?'settled':'')+'">'+
+      '<div class="entry-top"><div><div class="entry-name '+(e.settled?'crossed':'')+'">'+e.name+'</div><div class="entry-date">'+fmtDate(e.date)+'</div></div><div class="entry-amount">'+fmt(e.amount)+'</div></div>'+
+      '<div class="entry-tags">'+payerTag+'<span class="tag tag-split">✂️ '+splitLabel+'</span></div>'+
+      '<div class="entry-share">🌿 JP: '+fmt(sJP)+' &nbsp;|&nbsp; 💜 PP: '+fmt(sPP)+'</div>'+
+      oweHtml+
+      '<div class="entry-actions">'+settleBtn+'<button class="btn-edit" onclick="openEdit('+e.id+')">✏️ แก้ไข</button><button class="btn-del" onclick="deleteEntry('+e.id+')">🗑️ ลบ</button></div>'+
+      '</div>';
   }).join('');
 }
 
 function renderWish() {
-  const list=document.getElementById('wishList');
-  const pending=wishes.filter(w=>!w.bought);
-  const bought=wishes.filter(w=>w.bought);
+  var list=document.getElementById('wishList');
+  var pending=wishes.filter(function(w){return !w.bought;}), bought=wishes.filter(function(w){return w.bought;});
   document.getElementById('wishCountBadge').textContent=pending.length;
-  if(!wishes.length){list.innerHTML=`<div class="empty-state"><div class="big-emoji">🛒</div><p>ยังไม่มีของอยากได้<br>เพิ่มรายการแรกเลย! 🌸</p></div>`;return;}
-  const whoTag=w=>{if(w.who==='jp')return`<span class="tag tag-who-jp">🌿 JP อยากได้</span>`;if(w.who==='pp')return`<span class="tag tag-who-pp">💜 PP อยากได้</span>`;return`<span class="tag tag-who-both">💕 ทั้งคู่อยากได้</span>`;};
-  let html='';
+  if(!wishes.length){list.innerHTML='<div class="empty-state"><div class="big-emoji">🛒</div><p>ยังไม่มีของอยากได้<br>เพิ่มรายการแรกเลย! 🌸</p></div>';return;}
+  function whoTag(w){return w.who==='jp'?'<span class="tag tag-who-jp">🌿 JP อยากได้</span>':w.who==='pp'?'<span class="tag tag-who-pp">💜 PP อยากได้</span>':'<span class="tag tag-who-both">💕 ทั้งคู่อยากได้</span>';}
+  var html='';
   if(pending.length){
-    html+=`<div class="wish-section-title">🛍️ รออยู่ (${pending.length})</div>`;
-    html+=pending.map(w=>`
-      <div class="wish-item">
-        <div class="wish-item-top"><div class="wish-item-name">${w.name}</div><div class="wish-price">${w.price>0?fmt(w.price):'ยังไม่ระบุ'}</div></div>
-        <div class="wish-tags">${whoTag(w)}${w.note?`<span class="tag tag-split">📝 ${w.note.length>20?w.note.slice(0,20)+'...':w.note}</span>`:''}</div>
-        <div class="entry-actions">
-          <button class="btn-paid" onclick="openPaidModal(${w.id})">✅ จ่ายแล้ว!</button>
-          <button class="btn-edit" onclick="openEditWish(${w.id})">✏️ แก้ไข</button>
-          <button class="btn-del" onclick="deleteWish(${w.id})">🗑️</button>
-        </div>
-      </div>`).join('');
+    html+='<div class="wish-section-title">🛍️ รออยู่ ('+pending.length+')</div>';
+    html+=pending.map(function(w){return '<div class="wish-item"><div class="wish-item-top"><div class="wish-item-name">'+w.name+'</div><div class="wish-price">'+(w.price>0?fmt(w.price):'ยังไม่ระบุ')+'</div></div><div class="wish-tags">'+whoTag(w)+(w.note?'<span class="tag tag-split">📝 '+(w.note.length>20?w.note.slice(0,20)+'...':w.note)+'</span>':'')+'</div><div class="entry-actions"><button class="btn-paid" onclick="openPaidModal('+w.id+')">✅ จ่ายแล้ว!</button><button class="btn-edit" onclick="openEditWish('+w.id+')">✏️ แก้ไข</button><button class="btn-del" onclick="deleteWish('+w.id+')">🗑️</button></div></div>';}).join('');
   }
   if(bought.length){
-    html+=`<div class="wish-section-title">✅ ซื้อแล้ว (${bought.length})</div>`;
-    html+=bought.map(w=>`
-      <div class="wish-item bought">
-        <div class="wish-item-top"><div><div class="wish-item-name">${w.name}</div><div class="entry-date">${w.boughtDate?fmtDate(w.boughtDate):''}</div></div><div class="wish-price">${w.boughtAmount?fmt(w.boughtAmount):w.price>0?fmt(w.price):'—'}</div></div>
-        <div class="wish-tags"><span class="tag tag-bought">✅ ซื้อแล้ว</span>${whoTag(w)}</div>
-        <div class="entry-actions"><button class="btn-del" onclick="deleteWish(${w.id})">🗑️ ลบ</button></div>
-      </div>`).join('');
+    html+='<div class="wish-section-title">✅ ซื้อแล้ว ('+bought.length+')</div>';
+    html+=bought.map(function(w){return '<div class="wish-item bought"><div class="wish-item-top"><div><div class="wish-item-name">'+w.name+'</div><div class="entry-date">'+(w.boughtDate?fmtDate(w.boughtDate):'')+'</div></div><div class="wish-price">'+(w.boughtAmount?fmt(w.boughtAmount):w.price>0?fmt(w.price):'—')+'</div></div><div class="wish-tags"><span class="tag tag-bought">✅ ซื้อแล้ว</span>'+whoTag(w)+'</div><div class="entry-actions"><button class="btn-del" onclick="deleteWish('+w.id+')">🗑️ ลบ</button></div></div>';}).join('');
   }
   list.innerHTML=html;
 }
 
-// ─── INIT ────────────────────────────────────────────────
-updateSheetTip();
-if(SCRIPT_URL) {
-  setSyncBar('loading','กำลังโหลดจาก Google Sheets...');
-  loadFromSheet();
-} else {
-  setSyncBar('local','ยังไม่ได้เชื่อม Google Sheets');
-  // show setup hint on first visit
-  if(!localStorage.getItem('jppp_setup_seen')) {
-    document.getElementById('setupCard').style.display='block';
-    localStorage.setItem('jppp_setup_seen','1');
-  }
-}
-renderAll();
+setSyncBar('loading','กำลังเชื่อมต่อ Supabase...');
+loadFromSupabase();
+
 </script>
+
 </body>
 </html>
