@@ -489,7 +489,11 @@ input[type=file] { display:none; }
 // ─── STATE ───────────────────────────────────────────────
 let entries = JSON.parse(localStorage.getItem('jppp_v2') || '[]');
 let wishes  = JSON.parse(localStorage.getItem('jppp_wish') || '[]');
-let SCRIPT_URL = localStorage.getItem('jppp_script_url') || '';
+// ⬇️ วาง Apps Script URL ของคุณตรงนี้ (แล้ว re-upload ขึ้น GitHub ครั้งเดียว ทุกเครื่องใช้ได้เลย)
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbzgzwJX9LYCKBLVLQZzVBqrgbrFDHoKsWMxoBYnErhtohI_ysI0bi613exdZOFqMvEo-g/exec';
+let SCRIPT_URL = HARDCODED_URL.startsWith('https://script.google.com')
+  ? HARDCODED_URL
+  : (localStorage.getItem('jppp_script_url') || '');
 let curSplit = 50, curPayer = 'jp';
 let syncing = false;
 
@@ -542,20 +546,28 @@ function disconnectSheet() {
   setSyncBar('local','ยังไม่ได้เชื่อม Google Sheets'); updateSheetTip();
 }
 
-// ─── GOOGLE SHEETS SYNC ──────────────────────────────────
-async function callSheet(payload) {
+// ─── GOOGLE SHEETS SYNC (GET-only, CORS-safe) ────────────
+//  Apps Script redirect ทำให้ POST ติด CORS
+//  แก้โดยส่งทุกอย่างเป็น GET + query params แทน
+async function callSheet(params) {
   if(!SCRIPT_URL) return null;
   try {
     setSyncBar('loading','กำลังซิงก์...');
-    const res = await fetch(SCRIPT_URL, {
-      method:'POST', body:JSON.stringify(payload),
-      headers:{'Content-Type':'text/plain'}   // Apps Script requires text/plain for no-CORS
-    });
+    const qs = Object.entries(params)
+      .map(([k,v]) => {
+        const val = (typeof v === 'object') ? encodeURIComponent(JSON.stringify(v)) : encodeURIComponent(String(v));
+        return k + '=' + val;
+      }).join('&');
+    // ใช้ no-cors mode ไม่ได้อ่าน response → ใช้ jsonp-style แทน
+    const url = SCRIPT_URL + '?' + qs + '&_t=' + Date.now();
+    const res = await fetch(url, { redirect:'follow' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     setSyncBar('ok','ซิงก์แล้ว ✅');
     return data;
   } catch(err) {
-    setSyncBar('error','ซิงก์ไม่ได้ (offline mode) ⚠️');
+    console.warn('Sync error:', err);
+    setSyncBar('error','ซิงก์ไม่ได้ ⚠️ (ข้อมูลบันทึกใน localStorage แล้ว)');
     return null;
   }
 }
@@ -564,16 +576,19 @@ async function loadFromSheet() {
   if(!SCRIPT_URL) return;
   setSyncBar('loading','กำลังโหลดจาก Google Sheets...');
   try {
-    const url = SCRIPT_URL + '?action=getAll';
-    const res = await fetch(url);
+    const url = SCRIPT_URL + '?action=getAll&_t=' + Date.now();
+    const res = await fetch(url, { redirect:'follow' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
+    if(!data.ok && !data.entries) throw new Error(data.error||'no data');
     if(data.entries) { entries=data.entries; localStorage.setItem('jppp_v2',JSON.stringify(entries)); }
-    if(data.wishes)  { wishes=data.wishes;  localStorage.setItem('jppp_wish',JSON.stringify(wishes)); }
+    if(data.wishes)  { wishes=data.wishes;   localStorage.setItem('jppp_wish',JSON.stringify(wishes)); }
     setSyncBar('ok',`โหลดสำเร็จ · ${entries.length} รายการ ✅`);
     renderAll();
     showToast('🔄 โหลดข้อมูลจาก Google Sheets แล้ว');
   } catch(err) {
-    setSyncBar('error','โหลดไม่ได้ ใช้ข้อมูลใน localStorage แทน');
+    console.warn('Load error:', err);
+    setSyncBar('error','โหลดไม่ได้ — ตรวจสอบ Script URL หรือ permission');
   }
 }
 
