@@ -310,6 +310,7 @@ input[type=file] { display:none; }
         <button class="btn-export json" onclick="exportJSON()">💾 Backup JSON<br><span style="font-weight:400;font-size:0.7rem">สำรองข้อมูล</span></button>
         <button class="btn-export btn-import" onclick="document.getElementById('importFile').click()">📥 Import JSON<br><span style="font-weight:400;font-size:0.7rem">กู้คืนข้อมูล</span></button>
         <button class="btn-export share" onclick="copyShareText()">📋 Copy สรุป<br><span style="font-weight:400;font-size:0.7rem">แชร์ให้แฟน</span></button>
+        <button class="btn-export" onclick="forceUploadAll()" style="border-color:#a78bcc;color:#6a3ea0;background:#f8f0ff;grid-column:1/-1">☁️ อัปโหลดข้อมูลทั้งหมดขึ้น Sheet<br><span style="font-weight:400;font-size:0.7rem">กดครั้งเดียวเพื่อ sync ข้อมูลเก่าขึ้น Google Sheets</span></button>
       </div>
       <input type="file" id="importFile" accept=".json" onchange="importJSON(this)">
       <div class="gsheet-tip" id="sheetTip">
@@ -552,13 +553,11 @@ function disconnectSheet() {
 async function callSheet(params) {
   if(!SCRIPT_URL) return null;
   try {
-    setSyncBar('loading','กำลังซิงก์...');
     const qs = Object.entries(params)
       .map(([k,v]) => {
         const val = (typeof v === 'object') ? encodeURIComponent(JSON.stringify(v)) : encodeURIComponent(String(v));
         return k + '=' + val;
       }).join('&');
-    // ใช้ no-cors mode ไม่ได้อ่าน response → ใช้ jsonp-style แทน
     const url = SCRIPT_URL + '?' + qs + '&_t=' + Date.now();
     const res = await fetch(url, { redirect:'follow' });
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -567,7 +566,7 @@ async function callSheet(params) {
     return data;
   } catch(err) {
     console.warn('Sync error:', err);
-    setSyncBar('error','ซิงก์ไม่ได้ ⚠️ (ข้อมูลบันทึกใน localStorage แล้ว)');
+    // ไม่ขึ้น error bar ตอน write เพื่อไม่ให้สับสนกับ load error
     return null;
   }
 }
@@ -581,14 +580,41 @@ async function loadFromSheet() {
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     if(!data.ok && !data.entries) throw new Error(data.error||'no data');
-    if(data.entries) { entries=data.entries; localStorage.setItem('jppp_v2',JSON.stringify(entries)); }
-    if(data.wishes)  { wishes=data.wishes;   localStorage.setItem('jppp_wish',JSON.stringify(wishes)); }
-    setSyncBar('ok',`โหลดสำเร็จ · ${entries.length} รายการ ✅`);
+
+    // ✅ ทับ localStorage เฉพาะตอนที่ Sheet มีข้อมูล
+    // ถ้า Sheet ว่าง แต่ localStorage มีอยู่ → ให้ใช้ localStorage แทน (ป้องกันข้อมูลหาย)
+    if(data.entries && data.entries.length > 0) {
+      entries = data.entries;
+      localStorage.setItem('jppp_v2', JSON.stringify(entries));
+    } else if(data.entries && data.entries.length === 0 && entries.length > 0) {
+      // Sheet ว่าง แต่ local มีข้อมูล → sync local ขึ้น Sheet
+      setSyncBar('loading','Sheet ว่าง กำลัง sync ข้อมูล local ขึ้น...');
+      for(const e of entries) {
+        await callSheet({action:'addEntry', entry:e});
+      }
+    } else if(data.entries) {
+      entries = data.entries;
+      localStorage.setItem('jppp_v2', JSON.stringify(entries));
+    }
+
+    if(data.wishes && data.wishes.length > 0) {
+      wishes = data.wishes;
+      localStorage.setItem('jppp_wish', JSON.stringify(wishes));
+    } else if(data.wishes && data.wishes.length === 0 && wishes.length > 0) {
+      for(const w of wishes) {
+        await callSheet({action:'addWish', wish:w});
+      }
+    } else if(data.wishes) {
+      wishes = data.wishes;
+      localStorage.setItem('jppp_wish', JSON.stringify(wishes));
+    }
+
+    setSyncBar('ok',`ซิงก์แล้ว · ${entries.length} รายการ ✅`);
     renderAll();
     showToast('🔄 โหลดข้อมูลจาก Google Sheets แล้ว');
   } catch(err) {
     console.warn('Load error:', err);
-    setSyncBar('error','โหลดไม่ได้ — ตรวจสอบ Script URL หรือ permission');
+    setSyncBar('error','โหลดไม่ได้ — ใช้ข้อมูลเดิมไปก่อน');
   }
 }
 
@@ -817,6 +843,33 @@ function importJSON(input) {
   };
   reader.readAsText(file);input.value='';
 }
+async function forceUploadAll() {
+  if(!SCRIPT_URL) { alert('ยังไม่ได้เชื่อม Google Sheets 🙏'); return; }
+  if(!entries.length && !wishes.length) { alert('ไม่มีข้อมูลที่จะอัปโหลด'); return; }
+  if(!confirm(`อัปโหลดข้อมูลทั้งหมดขึ้น Google Sheets?\n- รายจ่าย ${entries.length} รายการ\n- ของอยากได้ ${wishes.length} รายการ\n\n⚠️ จะล้าง Sheet แล้ว upload ใหม่ทั้งหมด`)) return;
+
+  setSyncBar('loading', 'กำลังอัปโหลด...');
+  try {
+    // ล้าง Sheet ก่อน
+    await callSheet({action:'clearEntries'});
+    await callSheet({action:'clearWishes'});
+    // upload ทีละรายการ
+    for(let i=0; i<entries.length; i++) {
+      setSyncBar('loading', `อัปโหลดรายจ่าย ${i+1}/${entries.length}...`);
+      await callSheet({action:'addEntry', entry:entries[i]});
+    }
+    for(let i=0; i<wishes.length; i++) {
+      setSyncBar('loading', `อัปโหลดของอยากได้ ${i+1}/${wishes.length}...`);
+      await callSheet({action:'addWish', wish:wishes[i]});
+    }
+    setSyncBar('ok', `☁️ อัปโหลดสำเร็จ ${entries.length} รายการ ✅`);
+    showToast(`✅ อัปโหลดสำเร็จ! ${entries.length} รายจ่าย + ${wishes.length} ของอยากได้`);
+  } catch(err) {
+    setSyncBar('error', 'อัปโหลดไม่สำเร็จ ลองใหม่');
+    console.error(err);
+  }
+}
+
 function copyShareText() {
   let paidJP=0,paidPP=0,shareJP=0,sharePP=0;
   entries.forEach(e=>{if(e.payer==='jp')paidJP+=e.amount;else paidPP+=e.amount;shareJP+=e.amount*e.splitJP/100;sharePP+=e.amount*(100-e.splitJP)/100;});
